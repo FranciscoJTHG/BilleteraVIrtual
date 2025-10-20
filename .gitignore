@@ -1,0 +1,39 @@
+# Project-specific
+*.env
+.env.local
+.env.*.local
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+.npm/
+dist/
+build/
+
+# PHP
+vendor/
+*.log
+.PHP_CS_CACHE
+.phpunit.result.cache
+coverage/
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# MySQL
+mysql_data/
+*.sql
+
+# OS
+Thumbs.db
+.DS_Store
