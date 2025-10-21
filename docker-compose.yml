@@ -1,0 +1,64 @@
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: epayco-db
+    restart: unless-stopped
+    
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-epayco_wallet}
+      MYSQL_USER: ${MYSQL_USER:-epayco}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-epayco123}
+      MYSQL_INITDB_SKIP_TZINFO: 1
+    
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/my.cnf:/etc/mysql/conf.d/custom.cnf:ro
+    
+    networks:
+      epayco-network:
+        ipv4_address: 172.20.0.2
+
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u$$MYSQL_USER", "-p$$MYSQL_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  soap:
+    build:
+      context: ./soap-service
+      dockerfile: Dockerfile
+    container_name: epayco-soap
+    restart: unless-stopped
+    
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
+    
+    ports:
+      - "${SOAP_PORT:-8000}:8000"
+    
+    volumes:
+      - ./soap-service:/var/www/html
+    
+    depends_on:
+      mysql:
+        condition: service_healthy
+    
+    networks:
+      epayco-network:
+        ipv4_address: 172.20.0.3
+    
+    healthcheck:
+      test: ["CMD", "php", "-r", "file_get_contents('http://localhost:8000/health') || exit(1);"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
