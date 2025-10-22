@@ -15,6 +15,7 @@ use App\DTOs\RegistroClienteDTO;
 use App\DTOs\RecargaBilleteraDTO;
 use App\DTOs\PagarDTO;
 use App\DTOs\ConfirmarPagoDTO;
+use App\DTOs\ConsultarSaldoDTO;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
@@ -467,9 +468,47 @@ class WalletService
           }
       }
 
-     public function consultarSaldo(int $clienteId): array
+     public function consultarSaldo(int $clienteId, string $documento, string $celular): array
      {
          try {
+             // Paso 1: Crear y validar DTO
+             $dto = new ConsultarSaldoDTO();
+             $dto->setClienteId($clienteId);
+             $dto->setDocumento(trim($documento));
+             $dto->setCelular(trim($celular));
+
+             $errors = $this->validator->validate($dto);
+             if (count($errors) > 0) {
+                 return $this->generateStandardResponse(
+                     success: false,
+                     codError: ErrorCodes::CAMPOS_REQUERIDOS,
+                     messageError: 'Campos requeridos inválidos: ' . (string) $errors,
+                     data: null
+                 );
+             }
+
+             // Paso 2: Buscar cliente por clienteId
+             $cliente = $this->clienteRepository->find($clienteId);
+             if (!$cliente) {
+                 return $this->generateStandardResponse(
+                     success: false,
+                     codError: ErrorCodes::CLIENTE_NO_ENCONTRADO,
+                     messageError: 'Cliente no encontrado',
+                     data: null
+                 );
+             }
+
+             // Paso 3: Validar que documento y celular coincidan con el cliente
+             if ($cliente->getNumeroDocumento() !== trim($documento) || $cliente->getCelular() !== trim($celular)) {
+                 return $this->generateStandardResponse(
+                     success: false,
+                     codError: ErrorCodes::DATOS_INCORRECTOS,
+                     messageError: 'Los datos de documento y celular no coinciden con el cliente',
+                     data: null
+                 );
+             }
+
+             // Paso 4: Obtener billetera
              $billetera = $this->billeteraRepository->findByClienteId($clienteId);
              if (!$billetera) {
                  return $this->generateStandardResponse(
@@ -480,8 +519,10 @@ class WalletService
                  );
              }
 
+             // Paso 5: Obtener transacciones
              $transacciones = $this->transaccionRepository->findByBilleteraId($billetera->getId());
 
+             // Paso 6: Retornar respuesta exitosa
              return $this->generateStandardResponse(
                  success: true,
                  codError: ErrorCodes::SUCCESS,
@@ -497,6 +538,13 @@ class WalletService
                          'email' => $billetera->getCliente()->getEmail(),
                      ],
                  ]
+             );
+         } catch (\Doctrine\DBAL\Exception $e) {
+             return $this->generateStandardResponse(
+                 success: false,
+                 codError: ErrorCodes::ERROR_BD,
+                 messageError: 'Error de base de datos al consultar saldo: ' . $e->getMessage(),
+                 data: null
              );
          } catch (\Exception $e) {
              return $this->generateStandardResponse(
