@@ -90,6 +90,304 @@ docker-compose logs -f epayco-soap
 
 ---
 
+## ⚙️ Configuración del Archivo .env
+
+### Descripción General
+
+El proyecto utiliza archivos `.env` para configurar variables de entorno en cada servicio:
+- **REST Service** (Node.js)
+- **SOAP Service** (Symfony + Doctrine)
+- **Base de Datos** (MySQL)
+
+### Archivos .env Requeridos
+
+```
+BilleteraVirtual/
+├── rest-service/
+│   └── .env                 ← Crear basándose en .env.example
+└── soap-service/
+    └── .env.dev             ← Ya existe, usar como referencia
+```
+
+### 1️⃣ REST Service (.env)
+
+**Ubicación:** `rest-service/.env`
+
+**Archivo de ejemplo:** `rest-service/.env.example`
+
+```bash
+# Puerto de ejecución
+PORT=3000
+
+# Entorno de ejecución
+# - development: logs en consola, sin Morgan a archivo
+# - production: Morgan escribe a archivo
+NODE_ENV=development
+
+# URL del servicio SOAP (desde dentro de Docker)
+# Usar nombre del contenedor como hostname
+SOAP_URL=http://epayco-soap:8000/soap
+
+# Nivel de log
+LOG_LEVEL=debug
+```
+
+**Ejemplo Completo para Desarrollo:**
+
+```bash
+# ============================================
+# REST Service Configuration
+# ============================================
+
+# 🔧 Port Configuration
+PORT=3000
+
+# 🌍 Environment
+# Options: development, production, test
+NODE_ENV=development
+
+# 🔌 SOAP Service Connection
+# Inside Docker: use container name (epayco-soap)
+# Local development: use localhost:8000
+SOAP_URL=http://epayco-soap:8000/soap
+
+# 📝 Logging
+LOG_LEVEL=debug
+```
+
+**Pasos para Crear:**
+
+```bash
+# 1. Copiar archivo de ejemplo
+cp rest-service/.env.example rest-service/.env
+
+# 2. Verificar contenido (ya tiene valores por defecto)
+cat rest-service/.env
+
+# ✅ Listo para usar (no requiere cambios para desarrollo local)
+```
+
+---
+
+### 2️⃣ SOAP Service (.env.dev)
+
+**Ubicación:** `soap-service/.env.dev`
+
+**Ya está incluido en el repositorio, pero aquí está la configuración:**
+
+```bash
+# ============================================
+# SOAP Service Configuration (Symfony)
+# ============================================
+
+# 🌍 Symfony Environment
+APP_ENV=dev
+
+# 🐛 Debug Mode
+APP_DEBUG=1
+
+# 🔐 Secret Key (Para sesiones/tokens)
+APP_SECRET=dev_secret_key_epayco_2024
+
+# 🗄️ Database Connection
+# Format: mysql://username:password@host:port/database
+# Inside Docker: use container name (epayco-db)
+DATABASE_URL="mysql://epayco:epayco_secure_pass_2024@epayco-db:3306/epayco_wallet?serverVersion=8.0&charset=utf8mb4"
+
+# 📧 Email Configuration (MailHog for development)
+# MailHog SMTP endpoint
+MAILER_DSN=smtp://epayco-mailhog:1025
+
+# Email sender address
+MAILER_FROM="noreply@epayco.local"
+```
+
+**Variables Explicadas:**
+
+| Variable | Valor | Descripción |
+|----------|-------|-------------|
+| `APP_ENV` | `dev` | Entorno de Symfony (dev, prod, test) |
+| `APP_DEBUG` | `1` | Activar debug (1=sí, 0=no) |
+| `APP_SECRET` | `dev_secret_key...` | Clave para sesiones/tokens (cambiar en producción) |
+| `DATABASE_URL` | `mysql://epayco:...` | Conexión a MySQL (usuario:contraseña@host:puerto/base) |
+| `MAILER_DSN` | `smtp://mailhog:1025` | SMTP para envío de emails |
+| `MAILER_FROM` | `noreply@...` | Email remitente |
+
+**Notas Importantes:**
+- ✅ **Hostnames en Docker**: Usar nombres de contenedores (`epayco-db`, `epayco-soap`, `epayco-mailhog`)
+- ✅ **Puertos internos**: Usar puertos internos (3306, 8000, 1025), no puertos mapeados
+- ⚠️ **Credenciales**: Cambiar `APP_SECRET` en producción
+
+---
+
+### 3️⃣ Configuración de Base de Datos
+
+**Credenciales de MySQL** (definidas en `docker-compose.yml`):
+
+```yaml
+# Usuario
+MYSQL_USER: epayco
+MYSQL_PASSWORD: epayco_secure_pass_2024
+
+# Base de Datos
+MYSQL_DATABASE: epayco_wallet
+
+# Root Password (para administración)
+MYSQL_ROOT_PASSWORD: root_secure_pass_2024
+```
+
+**Conexión Desde Host (Fuera de Docker):**
+
+```bash
+# Conectar a MySQL desde tu máquina
+mysql -h localhost -P 3307 -u epayco -p epayco_secure_pass_2024 epayco_wallet
+
+# Puerto mapeado: 3307 → 3306 (ver docker-compose.yml)
+# Usuario: epayco
+# Contraseña: epayco_secure_pass_2024
+```
+
+**Conexión Desde Docker (Entre Contenedores):**
+
+```bash
+# Desde contenedor REST o SOAP
+docker exec -it epayco-rest curl http://epayco-db:3306
+
+# Hostname interno: epayco-db
+# Puerto interno: 3306
+```
+
+---
+
+### 4️⃣ Configuración de MailHog (Email)
+
+**Credenciales** (definidas en `docker-compose.yml`):
+
+```yaml
+# SMTP Server
+Host: epayco-mailhog (en Docker)
+Host: localhost (desde host)
+Puerto SMTP: 1025
+Puerto Web UI: 8025
+```
+
+**Acceder a Emails:**
+
+```bash
+# Desde navegador (emails capturados)
+http://localhost:8025
+
+# Todos los emails de prueba aparecen aquí
+# Útil para verificar tokens de pago
+```
+
+---
+
+### ✅ Setup Completo (Paso a Paso)
+
+```bash
+# 1. Clonar repositorio
+git clone <URL-del-repositorio>
+cd BilleteraVirtual
+
+# 2. Crear .env en REST Service (copiar de ejemplo)
+cp rest-service/.env.example rest-service/.env
+
+# 3. Verificar contenido (opcional, ya tiene valores)
+cat rest-service/.env
+
+# 4. Levantar servicios (Docker + .env automáticamente)
+docker-compose up -d
+
+# 5. Esperar health checks
+sleep 30
+
+# 6. Ejecutar migraciones
+docker exec -it epayco-soap php bin/console doctrine:migrations:migrate --no-interaction
+
+# 7. Verificar servicios
+docker-compose ps
+
+# ✅ Sistema listo
+# - REST API: http://localhost:3000
+# - Swagger UI: http://localhost:3000/api-docs/
+# - SOAP WSDL: http://localhost:8000/soap/wsdl
+# - MailHog: http://localhost:8025
+```
+
+---
+
+### 🔐 Variables de Entorno por Servicio
+
+#### REST Service (Node.js)
+
+| Variable | Desarrollo | Producción | Requerida |
+|----------|-----------|-----------|-----------|
+| `PORT` | 3000 | 3000 | ✅ |
+| `NODE_ENV` | development | production | ✅ |
+| `SOAP_URL` | `http://epayco-soap:8000/soap` | URL real | ✅ |
+| `LOG_LEVEL` | debug | info | ❌ |
+
+#### SOAP Service (Symfony)
+
+| Variable | Desarrollo | Producción | Requerida |
+|----------|-----------|-----------|-----------|
+| `APP_ENV` | dev | prod | ✅ |
+| `APP_DEBUG` | 1 | 0 | ✅ |
+| `APP_SECRET` | dev_secret_key... | *generar* | ✅ |
+| `DATABASE_URL` | `mysql://epayco:...@epayco-db:...` | URL real | ✅ |
+| `MAILER_DSN` | `smtp://epayco-mailhog:1025` | SendGrid/Mailgun | ✅ |
+| `MAILER_FROM` | noreply@epayco.local | info@epayco.com | ✅ |
+
+---
+
+### ⚡ Ejemplo: Cambiar Puerto REST
+
+```bash
+# Editar rest-service/.env
+PORT=4000
+
+# Reiniciar servicio
+docker-compose down
+docker-compose up -d
+
+# Acceder en puerto nuevo
+http://localhost:4000
+```
+
+---
+
+### 🐛 Troubleshooting .env
+
+**Problema:** "SOAP_URL not found"
+```bash
+# Verificar que .env existe
+ls -la rest-service/.env
+
+# Recrearlo desde ejemplo
+cp rest-service/.env.example rest-service/.env
+```
+
+**Problema:** "Cannot connect to database"
+```bash
+# Verificar DATABASE_URL en .env.dev
+cat soap-service/.env.dev
+
+# Verificar conectividad
+docker exec -it epayco-soap curl http://epayco-db:3306
+```
+
+**Problema:** "Emails no se envían"
+```bash
+# Verificar MailHog está corriendo
+docker-compose ps | grep mailhog
+
+# Acceder a MailHog UI
+http://localhost:8025
+```
+
+---
+
 ## 🚀 Instalación y Ejecución
 
 ### 1. Clonar el Repositorio
@@ -441,69 +739,6 @@ Coverage:
  middlewares          | 76.47% | 40%  | 75%  | 75%
  validators (schemas) | 100%   | 100% | 100% | 100%
 ```
-
-### 📖 Documentación Completa de Tests
-
-Ver [TEST_SUMMARY.md](TEST_SUMMARY.md) para documentación exhaustiva de todos los tests.
-
----
-
-## ✅ Evaluación de Calidad de Software
-
-### 🏆 Estado: PRODUCTION READY (Calificación: 9.7/10)
-
-**Evaluación por Dimensiones:**
-
-| Categoría | Nota | Detalles |
-|-----------|------|----------|
-| **Cobertura de Tests** | 9/10 | 82.69% para thin layer REST + 80% SOAP business logic |
-| **Arquitectura** | 10/10 | Two-layer validation + Test pyramid pattern |
-| **Escenarios Críticos** | 9/10 | Todos los happy paths + validaciones + errors cubiertos |
-| **Maintainability** | 10/10 | Tests claros, bien documentados, fácil debugging |
-| **Performance** | 10/10 | Fast unit tests (mocked) + E2E confidence (real) |
-| **Documentation** | 10/10 | README, TEST_SUMMARY, E2E README, inline docs |
-
-**Comparación con Estándares de Industria (7 años experiencia):**
-
-```
-Estándar Backend Enterprise:
-├─ Código crítico: 80-90% coverage     ✅ (82.69%)
-├─ Business logic: 100% coverage       ✅ (delegada a SOAP - 80%)
-├─ Happy paths: 100% coverage          ✅ (10/10 tests)
-├─ Error handling: 100% coverage       ✅ (15/15 scenarios)
-└─ Integration tests: Present          ✅ (20 E2E tests)
-
-Resultado: CUMPLE y EXCEDE estándares ✅
-```
-
-### 📋 Justificación de Suficiencia
-
-**¿Por qué no se requieren más tests?**
-
-1. **Separation of Concerns**
-   - REST layer: HTTP bridge (457 LOC) → 82.69% coverage ✅
-   - SOAP layer: Business logic (2000+ LOC) → 80% coverage ✅
-   - Cada capa testea su responsabilidad
-
-2. **Test Pyramid Correcta**
-   ```
-        E2E (20)      ← Confidence
-       /        \
-      /   Unit   \    ← Speed
-     /    (15)    \
-   ```
-
-3. **Scenarios Completos**
-   - ✅ 10 happy paths (100% endpoints)
-   - ✅ 15 REST validations (Joi)
-   - ✅ 5 SOAP validations (DTO)
-   - ✅ 5 error propagations
-
-4. **No Crítico para MVP**
-   - ⚠️ Security tests (sanitización ya implementada)
-   - ⚠️ Performance tests (tráfico bajo esperado)
-   - ⚠️ Chaos engineering (para scale-up futuro)
-
 ---
 
 ## 🧪 Testing con Postman
@@ -784,26 +1019,6 @@ docker exec epayco-rest tail -f /app/logs/error.log
 # Descargar para análisis
 docker cp epayco-rest:/app/logs ./logs-backup
 ```
-
-### 💾 Rotación de Logs (Recomendado para Producción)
-
-Para rotación automática de logs usando `logrotate`:
-
-```bash
-# Crear configuración
-cat > /etc/logrotate.d/epayco-rest << 'EOF'
-/path/to/rest-service/logs/*.log {
-  daily
-  rotate 14
-  compress
-  delaycompress
-  missingok
-  notifempty
-  create 0640 node node
-}
-EOF
-```
-
 ---
 
 ## 🔐 Seguridad
@@ -907,16 +1122,6 @@ EOF
 | **Fase 1: Arquitectura** | ✅ COMPLETADO | Docker Compose + microservicios |
 | **Fase 2: SOAP Service** | ✅ COMPLETADO | Business logic + 50+ tests PHPUnit |
 | **Fase 3: REST Service** | ✅ COMPLETADO | HTTP bridge + 35 tests Jest |
-| Registro de Cliente | ✅ COMPLETADO | Validación Joi + DTO |
-| Recarga de Billetera | ✅ COMPLETADO | Transacciones atómicas |
-| Flujo de Pago | ✅ COMPLETADO | Token email + confirmación |
-| Consulta de Saldo | ✅ COMPLETADO | En tiempo real |
-| Tests Automatizados | ✅ COMPLETADO | 85+ tests (100% pass rate) |
-| Docker Health Checks | ✅ COMPLETADO | Todos los servicios |
-| Colección Postman | ✅ COMPLETADO | 5 servicios documentados |
-| **Swagger/OpenAPI 3.0** | ✅ COMPLETADO | Documentación interactiva |
-| **Morgan HTTP Logging** | ✅ COMPLETADO | Logs de requests y errores |
-| **Evaluación de Calidad** | ✅ **9.7/10** | **Production Ready** |
 
 ### Servicios Activos
 
@@ -981,16 +1186,3 @@ docker exec -it epayco-soap php bin/console doctrine:migrations:migrate --no-int
 
 ---
 
-## 📄 Licencia
-
-Este proyecto está bajo la Licencia MIT.
-
----
-
-## 📞 Soporte
-
-Para reportar bugs o sugerir mejoras, por favor abre un issue en el repositorio.
-
----
-
-**Desarrollado con ❤️ como prueba técnica para ePayco**
