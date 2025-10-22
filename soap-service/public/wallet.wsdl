@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions name="WalletService"
+             targetNamespace="http://epayco.com/wallet"
+             xmlns:tns="http://epayco.com/wallet"
+             xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+             xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+             xmlns="http://schemas.xmlsoap.org/wsdl/">
+
+    <!-- Types -->
+    <types>
+        <xsd:schema targetNamespace="http://epayco.com/wallet">
+            <xsd:complexType name="StandardResponse">
+                <xsd:sequence>
+                    <xsd:element name="success" type="xsd:boolean"/>
+                    <xsd:element name="cod_error" type="xsd:string"/>
+                    <xsd:element name="message_error" type="xsd:string"/>
+                    <xsd:element name="data" type="xsd:anyType"/>
+                </xsd:sequence>
+            </xsd:complexType>
+            
+            <xsd:complexType name="PagoResponse">
+                <xsd:sequence>
+                    <xsd:element name="success" type="xsd:boolean"/>
+                    <xsd:element name="cod_error" type="xsd:string"/>
+                    <xsd:element name="message_error" type="xsd:string"/>
+                    <xsd:element name="data" type="xsd:anyType"/>
+                </xsd:sequence>
+            </xsd:complexType>
+            
+            <xsd:complexType name="SaldoResponse">
+                <xsd:sequence>
+                    <xsd:element name="saldo" type="xsd:decimal"/>
+                    <xsd:element name="fechaUltimaActualizacion" type="xsd:string" nillable="true"/>
+                    <xsd:element name="totalTransacciones" type="xsd:int"/>
+                    <xsd:element name="cliente" type="tns:ClienteInfo"/>
+                </xsd:sequence>
+            </xsd:complexType>
+            
+            <xsd:complexType name="ClienteInfo">
+                <xsd:sequence>
+                    <xsd:element name="id" type="xsd:int"/>
+                    <xsd:element name="nombres" type="xsd:string"/>
+                    <xsd:element name="apellidos" type="xsd:string"/>
+                    <xsd:element name="email" type="xsd:string"/>
+                </xsd:sequence>
+            </xsd:complexType>
+        </xsd:schema>
+    </types>
+
+    <!-- Messages -->
+    <message name="registroClienteRequest">
+        <part name="tipoDocumento" type="xsd:string"/>
+        <part name="numeroDocumento" type="xsd:string"/>
+        <part name="nombres" type="xsd:string"/>
+        <part name="apellidos" type="xsd:string"/>
+        <part name="email" type="xsd:string"/>
+        <part name="celular" type="xsd:string"/>
+    </message>
+    <message name="registroClienteResponse">
+        <part name="response" type="tns:StandardResponse"/>
+    </message>
+
+    <message name="recargaBilleteraRequest">
+        <part name="clienteId" type="xsd:int"/>
+        <part name="documento" type="xsd:string"/>
+        <part name="celular" type="xsd:string"/>
+        <part name="monto" type="xsd:decimal"/>
+        <part name="referencia" type="xsd:string"/>
+    </message>
+    <message name="recargaBilleteraResponse">
+        <part name="response" type="tns:StandardResponse"/>
+    </message>
+
+    <message name="pagarRequest">
+        <part name="clienteId" type="xsd:int"/>
+        <part name="monto" type="xsd:decimal"/>
+        <part name="descripcion" type="xsd:string"/>
+    </message>
+    <message name="pagarResponse">
+        <part name="response" type="tns:PagoResponse"/>
+    </message>
+
+    <message name="confirmarPagoRequest">
+        <part name="sessionId" type="xsd:string"/>
+        <part name="token" type="xsd:string"/>
+    </message>
+    <message name="confirmarPagoResponse">
+        <part name="response" type="tns:StandardResponse"/>
+    </message>
+
+    <message name="consultarSaldoRequest">
+        <part name="clienteId" type="xsd:int"/>
+        <part name="documento" type="xsd:string"/>
+        <part name="celular" type="xsd:string"/>
+    </message>
+    <message name="consultarSaldoResponse">
+        <part name="response" type="tns:StandardResponse"/>
+    </message>
+
+    <!-- Port Type -->
+    <portType name="WalletPortType">
+        <operation name="registroCliente">
+            <input message="tns:registroClienteRequest"/>
+            <output message="tns:registroClienteResponse"/>
+        </operation>
+        <operation name="recargaBilletera">
+            <input message="tns:recargaBilleteraRequest"/>
+            <output message="tns:recargaBilleteraResponse"/>
+        </operation>
+        <operation name="pagar">
+            <input message="tns:pagarRequest"/>
+            <output message="tns:pagarResponse"/>
+        </operation>
+        <operation name="confirmarPago">
+            <input message="tns:confirmarPagoRequest"/>
+            <output message="tns:confirmarPagoResponse"/>
+        </operation>
+        <operation name="consultarSaldo">
+            <input message="tns:consultarSaldoRequest"/>
+            <output message="tns:consultarSaldoResponse"/>
+        </operation>
+    </portType>
+
+    <!-- Binding -->
+    <binding name="WalletBinding" type="tns:WalletPortType">
+        <soap:binding style="rpc" transport="http://schemas.xmlsoap.org/soap/http"/>
+        <operation name="registroCliente">
+            <soap:operation soapAction="registroCliente"/>
+            <input><soap:body use="literal"/></input>
+            <output><soap:body use="literal"/></output>
+        </operation>
+        <operation name="recargaBilletera">
+            <soap:operation soapAction="recargaBilletera"/>
+            <input><soap:body use="literal"/></input>
+            <output><soap:body use="literal"/></output>
+        </operation>
+        <operation name="pagar">
+            <soap:operation soapAction="pagar"/>
+            <input><soap:body use="literal"/></input>
+            <output><soap:body use="literal"/></output>
+        </operation>
+        <operation name="confirmarPago">
+            <soap:operation soapAction="confirmarPago"/>
+            <input><soap:body use="literal"/></input>
+            <output><soap:body use="literal"/></output>
+        </operation>
+        <operation name="consultarSaldo">
+            <soap:operation soapAction="consultarSaldo"/>
+            <input><soap:body use="literal"/></input>
+            <output><soap:body use="literal"/></output>
+        </operation>
+    </binding>
+
+    <!-- Service -->
+    <service name="WalletService">
+        <port name="WalletPort" binding="tns:WalletBinding">
+            <soap:address location="http://soap-service:8000/soap"/>
+        </port>
+    </service>
+</definitions>

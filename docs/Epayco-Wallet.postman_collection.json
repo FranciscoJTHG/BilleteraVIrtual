@@ -1,0 +1,732 @@
+{
+  "info": {
+    "_postman_id": "epayco-wallet-collection-v1",
+    "name": "ePayco Wallet API",
+    "description": "Colección completa de pruebas para la Billetera Virtual ePayco. Incluye todos los 5 servicios SOAP principales.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "12345678"
+  },
+  "item": [
+    {
+      "name": "1. REGISTRO DE CLIENTE",
+      "item": [
+        {
+          "name": "Registrar Cliente - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status es 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Respuesta tiene estructura correcta', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('success');",
+                  "    pm.expect(jsonData).to.have.property('cod_error');",
+                  "    pm.expect(jsonData).to.have.property('message_error');",
+                  "    pm.expect(jsonData).to.have.property('data');",
+                  "});",
+                  "",
+                  "if (pm.response.json().success) {",
+                  "    var data = pm.response.json().data;",
+                  "    pm.environment.set('client_id', data.id);",
+                  "    pm.test('Se guardó client_id en variable de entorno', function() {",
+                  "        pm.expect(pm.environment.get('client_id')).to.exist;",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/xml"
+              },
+              {
+                "key": "SOAPAction",
+                "value": "registroCliente"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"\n               xmlns:tns=\"http://epayco.com/wallet\">\n    <soap:Body>\n        <tns:registroCliente>\n            <tipoDocumento>CC</tipoDocumento>\n            <numeroDocumento>1234567890</numeroDocumento>\n            <nombres>Juan</nombres>\n            <apellidos>Pérez García</apellidos>\n            <email>juan.perez@example.com</email>\n            <celular>3001234567</celular>\n        </tns:registroCliente>\n    </soap:Body>\n</soap:Envelope>"
+            },
+            "url": {
+              "raw": "{{soap_url}}",
+              "host": [
+                "{{soap_url}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Registrar Cliente - Email Duplicado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Retorna error 02 (Cliente Duplicado)', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.cod_error).to.equal('02');",
+                  "    pm.expect(jsonData.success).to.equal(false);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/xml"
+              },
+              {
+                "key": "SOAPAction",
+                "value": "registroCliente"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"\n               xmlns:tns=\"http://epayco.com/wallet\">\n    <soap:Body>\n        <tns:registroCliente>\n            <tipoDocumento>CC</tipoDocumento>\n            <numeroDocumento>1234567891</numeroDocumento>\n            <nombres>Maria</nombres>\n            <apellidos>García López</apellidos>\n            <email>juan.perez@example.com</email>\n            <celular>3001234568</celular>\n        </tns:registroCliente>\n    </soap:Body>\n</soap:Envelope>"
+            },
+            "url": {
+              "raw": "{{soap_url}}",
+              "host": [
+                "{{soap_url}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Registrar Cliente - Documento Duplicado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Retorna error 02 (Cliente Duplicado)', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.cod_error).to.equal('02');",
+                  "    pm.expect(jsonData.success).to.equal(false);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/xml"
+              },
+              {
+                "key": "SOAPAction",
+                "value": "registroCliente"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"\n               xmlns:tns=\"http://epayco.com/wallet\">\n    <soap:Body>\n        <tns:registroCliente>\n            <tipoDocumento>CC</tipoDocumento>\n            <numeroDocumento>1234567890</numeroDocumento>\n            <nombres>Carlos</nombres>\n            <apellidos>Rodríguez Martínez</apellidos>\n            <email>carlos@example.com</email>\n            <celular>3009876543</celular>\n        </tns:registroCliente>\n    </soap:Body>\n</soap:Envelope>"
+            },
+            "url": {
+              "raw": "{{soap_url}}",
+              "host": [
+                "{{soap_url}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. RECARGA DE BILLETERA",
+      "item": [
+        {
+          "name": "Recargar Billetera - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status es 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Respuesta exitosa', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.equal(true);",
+                  "    pm.expect(jsonData.cod_error).to.equal('00');",
+                  "});",
+                  "",
+                  "pm.test('Nuevo saldo es correcto', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data.nuevoSaldo).to.equal('50000.00');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/xml"
+              },
+              {
+                "key": "SOAPAction",
+                "value": "recargaBilletera"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"\n               xmlns:tns=\"http://epayco.com/wallet\">\n    <soap:Body>\n        <tns:recargaBilletera>\n            <clienteId>{{client_id}}</clienteId>\n            <documento>1234567890</documento>\n            <celular>3001234567</celular>\n            <monto>50000</monto>\n            <referencia>RECARGA-001</referencia>\n        </tns:recargaBilletera>\n    </soap:Body>\n</soap:Envelope>"
+            },
+            "url": {
+              "raw": "{{soap_url}}",
+              "host": [
+                "{{soap_url}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Recargar Billetera - Cliente No Encontrado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Retorna error 03 (Cliente No Encontrado)', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.cod_error).to.equal('03');",
+                  "    pm.expect(jsonData.success).to.equal(false);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/xml"
+              },
+              {
+                "key": "SOAPAction",
+                "value": "recargaBilletera"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"\n               xmlns:tns=\"http://epayco.com/wallet\">\n    <soap:Body>\n        <tns:recargaBilletera>\n            <clienteId>999999</clienteId>\n            <documento>1234567890</documento>\n            <celular>3001234567</celular>\n            <monto>50000</monto>\n            <referencia>RECARGA-002</referencia>\n        </tns:recargaBilletera>\n    </soap:Body>\n</soap:Envelope>"
+            },
+            "url": {
+              "raw": "{{soap_url}}",
+              "host": [
+                "{{soap_url}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Recargar Billetera - Múltiples Recargas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Respuesta exitosa', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.equal(true);",
+                  "    pm.expect(jsonData.cod_error).to.equal('00');",
+                  "});",
+                  "",
+                  "pm.test('Nuevo saldo es acumulativo', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(parseFloat(jsonData.data.nuevoSaldo)).to.equal(100000.00);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/xml"
+              },
+              {
+                "key": "SOAPAction",
+                "value": "recargaBilletera"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"\n               xmlns:tns=\"http://epayco.com/wallet\">\n    <soap:Body>\n        <tns:recargaBilletera>\n            <clienteId>{{client_id}}</clienteId>\n            <documento>1234567890</documento>\n            <celular>3001234567</celular>\n            <monto>50000</monto>\n            <referencia>RECARGA-003</referencia>\n        </tns:recargaBilletera>\n    </soap:Body>\n</soap:Envelope>"
+            },
+            "url": {
+              "raw": "{{soap_url}}",
+              "host": [
+                "{{soap_url}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. INICIAR PAGO",
+      "item": [
+        {
+          "name": "Pagar - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status es 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Respuesta tiene sessionId', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('sessionId');",
+                  "    pm.environment.set('session_id', jsonData.sessionId);",
+                  "    pm.test('session_id guardado en variable de entorno', function() {",
+                  "        pm.expect(pm.environment.get('session_id')).to.exist;",
+                  "    });",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Este request genera un token que se envía por email"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/xml"
+              },
+              {
+                "key": "SOAPAction",
+                "value": "pagar"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"\n               xmlns:tns=\"http://epayco.com/wallet\">\n    <soap:Body>\n        <tns:pagar>\n            <clienteId>{{client_id}}</clienteId>\n            <monto>25000</monto>\n            <descripcion>Pago de servicios</descripcion>\n        </tns:pagar>\n    </soap:Body>\n</soap:Envelope>"
+            },
+            "url": {
+              "raw": "{{soap_url}}",
+              "host": [
+                "{{soap_url}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Pagar - Saldo Insuficiente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Retorna error en respuesta', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.equal(false);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/xml"
+              },
+              {
+                "key": "SOAPAction",
+                "value": "pagar"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"\n               xmlns:tns=\"http://epayco.com/wallet\">\n    <soap:Body>\n        <tns:pagar>\n            <clienteId>{{client_id}}</clienteId>\n            <monto>999999999</monto>\n            <descripcion>Pago con saldo insuficiente</descripcion>\n        </tns:pagar>\n    </soap:Body>\n</soap:Envelope>"
+            },
+            "url": {
+              "raw": "{{soap_url}}",
+              "host": [
+                "{{soap_url}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. CONFIRMAR PAGO",
+      "item": [
+        {
+          "name": "Confirmar Pago - Happy Path",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// IMPORTANTE: Obtener el token del email en MailHog antes de ejecutar este request",
+                  "// 1. Ir a http://localhost:8025",
+                  "// 2. Buscar el email más reciente",
+                  "// 3. Copiar el token de 6 dígitos",
+                  "// 4. Pegarlo en la variable de entorno 'token'"
+                ],
+                "type": "text/javascript"
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status es 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Pago confirmado exitosamente', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.equal(true);",
+                  "    pm.expect(jsonData.cod_error).to.equal('00');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/xml"
+              },
+              {
+                "key": "SOAPAction",
+                "value": "confirmarPago"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"\n               xmlns:tns=\"http://epayco.com/wallet\">\n    <soap:Body>\n        <tns:confirmarPago>\n            <sessionId>{{session_id}}</sessionId>\n            <token>{{token}}</token>\n        </tns:confirmarPago>\n    </soap:Body>\n</soap:Envelope>"
+            },
+            "url": {
+              "raw": "{{soap_url}}",
+              "host": [
+                "{{soap_url}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Confirmar Pago - Token Incorrecto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Retorna error 07 (Token Incorrecto)', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.cod_error).to.equal('07');",
+                  "    pm.expect(jsonData.success).to.equal(false);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/xml"
+              },
+              {
+                "key": "SOAPAction",
+                "value": "confirmarPago"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"\n               xmlns:tns=\"http://epayco.com/wallet\">\n    <soap:Body>\n        <tns:confirmarPago>\n            <sessionId>{{session_id}}</sessionId>\n            <token>000000</token>\n        </tns:confirmarPago>\n    </soap:Body>\n</soap:Envelope>"
+            },
+            "url": {
+              "raw": "{{soap_url}}",
+              "host": [
+                "{{soap_url}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Confirmar Pago - Sesión No Encontrada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Retorna error 06 (Sesión No Encontrada)', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.cod_error).to.equal('06');",
+                  "    pm.expect(jsonData.success).to.equal(false);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/xml"
+              },
+              {
+                "key": "SOAPAction",
+                "value": "confirmarPago"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"\n               xmlns:tns=\"http://epayco.com/wallet\">\n    <soap:Body>\n        <tns:confirmarPago>\n            <sessionId>00000000-0000-0000-0000-000000000000</sessionId>\n            <token>123456</token>\n        </tns:confirmarPago>\n    </soap:Body>\n</soap:Envelope>"
+            },
+            "url": {
+              "raw": "{{soap_url}}",
+              "host": [
+                "{{soap_url}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. CONSULTAR SALDO",
+      "item": [
+        {
+          "name": "Consultar Saldo - Happy Path",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status es 200', function() {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Respuesta tiene estructura correcta', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.success).to.equal(true);",
+                  "    pm.expect(jsonData.cod_error).to.equal('00');",
+                  "    pm.expect(jsonData.data).to.have.property('saldo');",
+                  "    pm.expect(jsonData.data).to.have.property('cliente');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/xml"
+              },
+              {
+                "key": "SOAPAction",
+                "value": "consultarSaldo"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"\n               xmlns:tns=\"http://epayco.com/wallet\">\n    <soap:Body>\n        <tns:consultarSaldo>\n            <clienteId>{{client_id}}</clienteId>\n        </tns:consultarSaldo>\n    </soap:Body>\n</soap:Envelope>"
+            },
+            "url": {
+              "raw": "{{soap_url}}",
+              "host": [
+                "{{soap_url}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Consultar Saldo - Cliente No Encontrado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Retorna error 03 (Cliente No Encontrado)', function() {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.cod_error).to.equal('03');",
+                  "    pm.expect(jsonData.success).to.equal(false);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/xml"
+              },
+              {
+                "key": "SOAPAction",
+                "value": "consultarSaldo"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<soap:Envelope xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\"\n               xmlns:tns=\"http://epayco.com/wallet\">\n    <soap:Body>\n        <tns:consultarSaldo>\n            <clienteId>999999</clienteId>\n        </tns:consultarSaldo>\n    </soap:Body>\n</soap:Envelope>"
+            },
+            "url": {
+              "raw": "{{soap_url}}",
+              "host": [
+                "{{soap_url}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6. SERVICIOS AUXILIARES",
+      "item": [
+        {
+          "name": "Ver Emails en MailHog",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{mailhog_url}}",
+              "host": [
+                "{{mailhog_url}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "API MailHog - Ver Emails",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{mailhog_url}}/api/v2/messages",
+              "host": [
+                "{{mailhog_url}}",
+                "api",
+                "v2",
+                "messages"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": []
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": []
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "soap_url",
+      "value": "http://localhost:8000/soap",
+      "type": "string",
+      "disabled": false
+    },
+    {
+      "key": "mailhog_url",
+      "value": "http://localhost:8025",
+      "type": "string",
+      "disabled": false
+    },
+    {
+      "key": "client_id",
+      "value": "",
+      "type": "string",
+      "disabled": false
+    },
+    {
+      "key": "session_id",
+      "value": "",
+      "type": "string",
+      "disabled": false
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string",
+      "disabled": false
+    }
+  ]
+}

@@ -1,0 +1,126 @@
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: epayco-db
+    restart: unless-stopped
+    
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-epayco_wallet}
+      MYSQL_USER: ${MYSQL_USER:-epayco}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-epayco123}
+      MYSQL_INITDB_SKIP_TZINFO: 1
+    
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    
+    volumes:
+      - mysql_data:/var/lib/mysql
+    
+    networks:
+      epayco-network:
+        ipv4_address: 172.20.0.2
+
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u$$MYSQL_USER", "-p$$MYSQL_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  soap:
+    build:
+      context: ./soap-service
+      dockerfile: Dockerfile
+    container_name: epayco-soap
+    restart: unless-stopped
+    
+    environment:
+      APP_ENV: ${APP_ENV:-dev}
+      DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
+      MAILER_DSN: smtp://mailhog:1025
+    
+    ports:
+      - "${SOAP_PORT:-8000}:8000"
+    
+    volumes:
+      - ./soap-service:/var/www/html
+      - soap_vendor:/var/www/html/vendor
+    
+    depends_on:
+      mysql:
+        condition: service_healthy
+    
+    networks:
+      epayco-network:
+        ipv4_address: 172.20.0.3
+    
+    healthcheck:
+      test: ["CMD", "php", "-r", "file_get_contents('http://localhost:8000/health') || exit(1);"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  rest:
+    build:
+      context: ./rest-service
+      dockerfile: Dockerfile
+    container_name: epayco-rest
+    restart: unless-stopped
+    
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      SOAP_URL: http://soap:8000/soap
+      DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
+    
+    ports:
+      - "${REST_PORT:-3000}:3000"
+    
+    volumes:
+      - ./rest-service:/app
+      - /app/node_modules
+    
+    depends_on:
+      mysql:
+        condition: service_healthy
+      soap:
+        condition: service_healthy
+    
+    networks:
+      epayco-network:
+        ipv4_address: 172.20.0.4
+    
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: epayco-mailhog
+    restart: unless-stopped
+    
+    ports:
+      - "${MAILHOG_SMTP_PORT:-1025}:1025"
+      - "${MAILHOG_UI_PORT:-8025}:8025"
+    
+    networks:
+      epayco-network:
+        ipv4_address: 172.20.0.5
+
+volumes:
+  mysql_data:
+    driver: local
+  soap_vendor:
+    driver: local
+
+networks:
+  epayco-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
