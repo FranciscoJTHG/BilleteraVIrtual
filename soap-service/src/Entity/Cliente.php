@@ -4,6 +4,7 @@ namespace App\Entity;
 
 use Doctrine\ORM\Mapping as ORM;
 use App\Repository\ClienteRepository;
+use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: ClienteRepository::class)]
 #[ORM\Table(name: 'clientes', indexes: [
@@ -17,21 +18,33 @@ class Cliente
     #[ORM\Column(type: 'integer')]
     private ?int $id = null;
 
+    #[Assert\NotBlank(message: 'El tipo de documento es requerido')]
+    #[Assert\Length(min: 2, max: 10, minMessage: 'El tipo de documento debe tener al menos 2 caracteres', maxMessage: 'El tipo de documento no debe exceder 10 caracteres')]
     #[ORM\Column(type: 'string', length: 10)]
     private string $tipoDocumento;
 
+    #[Assert\NotBlank(message: 'El número de documento es requerido')]
+    #[Assert\Length(min: 5, max: 20, minMessage: 'El número de documento debe tener al menos 5 caracteres', maxMessage: 'El número de documento no debe exceder 20 caracteres')]
     #[ORM\Column(type: 'string', length: 20, unique: true)]
     private string $numeroDocumento;
 
+    #[Assert\NotBlank(message: 'El nombre es requerido')]
+    #[Assert\Length(min: 2, max: 255, minMessage: 'El nombre debe tener al menos 2 caracteres', maxMessage: 'El nombre no debe exceder 255 caracteres')]
     #[ORM\Column(type: 'string', length: 255)]
     private string $nombres;
 
+    #[Assert\NotBlank(message: 'El apellido es requerido')]
+    #[Assert\Length(min: 2, max: 255, minMessage: 'El apellido debe tener al menos 2 caracteres', maxMessage: 'El apellido no debe exceder 255 caracteres')]
     #[ORM\Column(type: 'string', length: 255)]
     private string $apellidos;
 
+    #[Assert\NotBlank(message: 'El correo electrónico es requerido')]
+    #[Assert\Email(mode: 'html5', message: 'El correo electrónico no es válido')]
     #[ORM\Column(type: 'string', length: 255, unique: true)]
     private string $email;
 
+    #[Assert\NotBlank(message: 'El celular es requerido')]
+    #[Assert\Regex(pattern: '/^\d{10}$/', message: 'El celular debe contener exactamente 10 dígitos')]
     #[ORM\Column(type: 'string', length: 20)]
     private string $celular;
 

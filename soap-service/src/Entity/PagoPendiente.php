@@ -27,7 +27,7 @@ class PagoPendiente
     #[ORM\Column(type: 'decimal', precision: 10, scale: 2)]
     private string $monto;
 
-    #[ORM\Column(type: 'string', length: 6, nullable: true)]
+    #[ORM\Column(type: 'string', length: 36, nullable: true)]
     private ?string $token = null;
 
     #[ORM\Column(type: 'boolean', options: ['default' => false])]
