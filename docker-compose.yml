@@ -39,6 +39,7 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-dev}
       DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
+      MAILER_DSN: smtp://mailhog:1025
     
     ports:
       - "${SOAP_PORT:-8000}:8000"
@@ -71,7 +72,7 @@ services:
     
     environment:
       NODE_ENV: ${NODE_ENV:-development}
-      SOAP_URL: http://soap:8000
+      SOAP_URL: http://soap:8000/soap
       DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
     
     ports:
