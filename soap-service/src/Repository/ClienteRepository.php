@@ -16,19 +16,21 @@ class ClienteRepository extends ServiceEntityRepository
         parent::__construct($registry, Cliente::class);
     }
 
-    /**
-     * Buscar cliente por documento y celular
-     */
-    public function findByDocumentoAndCelular(string $documento, string $celular): ?Cliente
-    {
-        return $this->createQueryBuilder('c')
-            ->where('c.documento = :documento')
-            ->andWhere('c.celular = :celular')
-            ->setParameter('documento', $documento)
-            ->setParameter('celular', $celular)
-            ->getQuery()
-            ->getOneOrNullResult();
-    }
+     /**
+      * Buscar cliente por tipo documento, número documento y celular
+      */
+     public function findByDocumentoAndCelular(string $tipoDocumento, string $numeroDocumento, string $celular): ?Cliente
+     {
+         return $this->createQueryBuilder('c')
+             ->where('c.tipoDocumento = :tipoDocumento')
+             ->andWhere('c.numeroDocumento = :numeroDocumento')
+             ->andWhere('c.celular = :celular')
+             ->setParameter('tipoDocumento', $tipoDocumento)
+             ->setParameter('numeroDocumento', $numeroDocumento)
+             ->setParameter('celular', $celular)
+             ->getQuery()
+             ->getOneOrNullResult();
+     }
 
     /**
      * Buscar por documento

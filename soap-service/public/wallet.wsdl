@@ -20,9 +20,10 @@
             
             <xsd:complexType name="PagoResponse">
                 <xsd:sequence>
-                    <xsd:element name="sessionId" type="xsd:string"/>
-                    <xsd:element name="monto" type="xsd:decimal"/>
-                    <xsd:element name="expiresAt" type="xsd:string"/>
+                    <xsd:element name="success" type="xsd:boolean"/>
+                    <xsd:element name="cod_error" type="xsd:string"/>
+                    <xsd:element name="message_error" type="xsd:string"/>
+                    <xsd:element name="data" type="xsd:anyType"/>
                 </xsd:sequence>
             </xsd:complexType>
             
@@ -61,8 +62,9 @@
 
     <message name="recargaBilleteraRequest">
         <part name="clienteId" type="xsd:int"/>
-        <part name="monto" type="xsd:decimal"/>
-        <part name="referencia" type="xsd:string"/>
+        <part name="documento" type="xsd:string"/>
+        <part name="numeroCelular" type="xsd:string"/>
+        <part name="valor" type="xsd:decimal"/>
     </message>
     <message name="recargaBilleteraResponse">
         <part name="response" type="tns:StandardResponse"/>

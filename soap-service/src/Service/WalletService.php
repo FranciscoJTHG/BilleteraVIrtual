@@ -11,6 +11,10 @@ use App\Repository\BilleteraRepository;
 use App\Repository\TransaccionRepository;
 use App\Repository\PagoPendienteRepository;
 use App\Constants\ErrorCodes;
+use App\DTOs\RegistroClienteDTO;
+use App\DTOs\RecargaBilleteraDTO;
+use App\DTOs\PagarDTO;
+use App\DTOs\ConfirmarPagoDTO;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
@@ -38,16 +42,15 @@ class WalletService
         string $celular
     ): array {
         try {
-            $cliente = new Cliente();
-            $cliente->setTipoDocumento(trim($tipoDocumento));
-            $cliente->setNumeroDocumento(trim($numeroDocumento));
-            $cliente->setNombres(trim($nombres));
-            $cliente->setApellidos(trim($apellidos));
-            $cliente->setEmail(trim($email));
-            $cliente->setCelular(trim($celular));
-            $cliente->setFechaRegistro(new \DateTime());
+            $dto = new RegistroClienteDTO();
+            $dto->setTipoDocumento(trim($tipoDocumento));
+            $dto->setNumeroDocumento(trim($numeroDocumento));
+            $dto->setNombres(trim($nombres));
+            $dto->setApellidos(trim($apellidos));
+            $dto->setEmail(trim($email));
+            $dto->setCelular(trim($celular));
 
-            $violations = $this->validator->validate($cliente);
+            $violations = $this->validator->validate($dto);
 
             if (count($violations) > 0) {
                 return $this->generateStandardResponse(
@@ -57,6 +60,15 @@ class WalletService
                     data: null
                 );
             }
+
+            $cliente = new Cliente();
+            $cliente->setTipoDocumento($dto->getTipoDocumento());
+            $cliente->setNumeroDocumento($dto->getNumeroDocumento());
+            $cliente->setNombres($dto->getNombres());
+            $cliente->setApellidos($dto->getApellidos());
+            $cliente->setEmail($dto->getEmail());
+            $cliente->setCelular($dto->getCelular());
+            $cliente->setFechaRegistro(new \DateTime());
 
             $this->entityManager->persist($cliente);
             $this->entityManager->flush();
@@ -128,68 +140,61 @@ class WalletService
         }
     }
 
-    private function validarCamposRegistro(
-        string $tipoDocumento,
-        string $numeroDocumento,
-        string $nombres,
-        string $apellidos,
-        string $email,
-        string $celular
-    ): array {
-        $errores = [];
-
-        if (empty(trim($tipoDocumento))) {
-            $errores[] = 'El tipo de documento es requerido';
-        }
-
-        if (empty(trim($numeroDocumento))) {
-            $errores[] = 'El número de documento es requerido';
-        }
-
-        if (empty(trim($nombres))) {
-            $errores[] = 'El nombre es requerido';
-        }
-
-        if (empty(trim($apellidos))) {
-            $errores[] = 'El apellido es requerido';
-        }
-
-        if (empty(trim($email))) {
-            $errores[] = 'El correo electrónico es requerido';
-        } elseif (!filter_var(trim($email), FILTER_VALIDATE_EMAIL)) {
-            $errores[] = 'El correo electrónico no es válido';
-        }
-
-        if (empty(trim($celular))) {
-            $errores[] = 'El celular es requerido';
-        } elseif (!preg_match('/^\d{10}$/', trim($celular))) {
-            $errores[] = 'El celular debe contener exactamente 10 dígitos';
-        }
-
-        return $errores;
-    }
-
     public function recargaBilletera(
-        int $clienteId,
-        float $monto,
-        string $referencia
-    ): Transaccion {
-        $billetera = $this->billeteraRepository->findByClienteId($clienteId);
-        if (!$billetera) {
-            throw new \RuntimeException("Billetera no encontrada para el cliente");
-        }
-
-        $this->entityManager->beginTransaction();
-
+        ?int $clienteId,
+        string $documento,
+        string $numeroCelular,
+        float $valor
+    ): array {
         try {
-            $nuevoSaldo = (float)$billetera->getSaldo() + $monto;
+            $dto = new RecargaBilleteraDTO();
+            $dto->setClienteId($clienteId);
+            $dto->setDocumento(trim($documento));
+            $dto->setNumeroCelular(trim($numeroCelular));
+            $dto->setValor($valor);
+
+            $violations = $this->validator->validate($dto);
+
+            if (count($violations) > 0) {
+                return $this->generateStandardResponse(
+                    success: false,
+                    codError: ErrorCodes::CAMPOS_REQUERIDOS,
+                    messageError: (string) $violations[0]->getMessage(),
+                    data: null
+                );
+            }
+
+            $cliente = $this->clienteRepository->find($clienteId);
+
+            if (!$cliente) {
+                return $this->generateStandardResponse(
+                    success: false,
+                    codError: ErrorCodes::CLIENTE_NO_ENCONTRADO,
+                    messageError: 'Cliente no encontrado',
+                    data: null
+                );
+            }
+
+            $billetera = $this->billeteraRepository->findByClienteId($cliente->getId());
+            if (!$billetera) {
+                return $this->generateStandardResponse(
+                    success: false,
+                    codError: ErrorCodes::CLIENTE_NO_ENCONTRADO,
+                    messageError: 'Billetera no encontrada para el cliente',
+                    data: null
+                );
+            }
+
+            $this->entityManager->beginTransaction();
+
+            $nuevoSaldo = (float)$billetera->getSaldo() + $dto->getValor();
             $billetera->setSaldo(number_format($nuevoSaldo, 2, '.', ''));
 
             $transaccion = new Transaccion();
             $transaccion->setBilletera($billetera);
             $transaccion->setTipo('recarga');
-            $transaccion->setMonto(number_format($monto, 2, '.', ''));
-            $transaccion->setReferencia($referencia);
+            $transaccion->setMonto(number_format($dto->getValor(), 2, '.', ''));
+            $transaccion->setReferencia('RECARGA-' . uniqid());
             $transaccion->setEstado('completada');
             $transaccion->setFecha(new \DateTime());
 
@@ -198,141 +203,310 @@ class WalletService
             $this->entityManager->flush();
             $this->entityManager->commit();
 
-            return $transaccion;
+            return $this->generateStandardResponse(
+                success: true,
+                codError: ErrorCodes::SUCCESS,
+                messageError: 'Recarga realizada exitosamente',
+                data: [
+                    'transaccionId' => $transaccion->getId(),
+                    'nuevoSaldo' => $billetera->getSaldo(),
+                    'valor' => $transaccion->getMonto(),
+                    'fecha' => $transaccion->getFecha()->format('Y-m-d H:i:s')
+                ]
+            );
+        } catch (\Doctrine\DBAL\Exception $e) {
+            if ($this->entityManager->getConnection()->isTransactionActive()) {
+                $this->entityManager->rollback();
+            }
+            return $this->generateStandardResponse(
+                success: false,
+                codError: ErrorCodes::ERROR_BD,
+                messageError: 'Error al procesar recarga: ' . $e->getMessage(),
+                data: null
+            );
         } catch (\Exception $e) {
-            $this->entityManager->rollback();
-            throw new \RuntimeException("Error al procesar recarga: " . $e->getMessage());
+            if ($this->entityManager->getConnection()->isTransactionActive()) {
+                $this->entityManager->rollback();
+            }
+            return $this->generateStandardResponse(
+                success: false,
+                codError: ErrorCodes::ERROR_BD,
+                messageError: 'Error al procesar recarga: ' . $e->getMessage(),
+                data: null
+            );
         }
     }
 
     public function pagar(
-        int $clienteId,
+        ?int $clienteId,
         float $monto,
         string $descripcion
     ): array {
-        $billetera = $this->billeteraRepository->findByClienteId($clienteId);
-        if (!$billetera) {
-            throw new \RuntimeException("Billetera no encontrada");
-        }
-
-        if ($billetera->getSaldo() < $monto) {
-            throw new \RuntimeException("Saldo insuficiente");
-        }
-
-        $token = Uuid::v4()->toRfc4122();
-        $expirationTime = (new \DateTime())->modify('+15 minutes');
-
-        $pagoPendiente = new PagoPendiente();
-        $pagoPendiente->setBilletera($billetera);
-        $pagoPendiente->setMonto($monto);
-        $pagoPendiente->setDescripcion($descripcion);
-        $pagoPendiente->setSessionId($token);
-        $pagoPendiente->setToken($token);
-        $pagoPendiente->setEstado('pendiente');
-        $pagoPendiente->setFechaCreacion(new \DateTime());
-        $pagoPendiente->setFechaExpiracion($expirationTime);
-
-        $this->entityManager->persist($pagoPendiente);
-        $this->entityManager->flush();
-
-        $email = (new Email())
-            ->from('noreply@epayco.local')
-            ->to($billetera->getCliente()->getEmail())
-            ->subject('Confirmación de Pago - ePayco Wallet')
-            ->html(sprintf(
-                '<h2>Confirmación de Pago</h2>
-                <p>Token de confirmación: <strong>%s</strong></p>
-                <p>Monto: $%s</p>
-                <p>Descripción: %s</p>
-                <p>Este token expira en 15 minutos</p>',
-                $token,
-                number_format($monto, 2),
-                htmlspecialchars($descripcion)
-            ));
-
-        $this->mailer->send($email);
-
-        return [
-            'sessionId' => $token,
-            'monto' => $monto,
-            'expiresAt' => $expirationTime->format('Y-m-d H:i:s'),
-        ];
-    }
-
-    public function confirmarPago(
-        string $sessionId,
-        string $token
-    ): array {
-        $pagoPendiente = $this->pagoPendienteRepository->findBySessionId($sessionId);
-        if (!$pagoPendiente) {
-            throw new \RuntimeException("Sesión de pago no encontrada");
-        }
-
-        if ($pagoPendiente->getFechaExpiracion() < new \DateTime()) {
-            throw new \RuntimeException("Token expirado");
-        }
-
-        if ($pagoPendiente->getToken() !== $token) {
-            throw new \RuntimeException("Token inválido");
-        }
-
-        $this->entityManager->beginTransaction();
-
         try {
-            $billetera = $pagoPendiente->getBilletera();
-            $nuevoSaldo = $billetera->getSaldo() - $pagoPendiente->getMonto();
-            $billetera->setSaldo($nuevoSaldo);
+            $dto = new PagarDTO();
+            $dto->setClienteId($clienteId);
+            $dto->setMonto($monto);
+            $dto->setDescripcion(trim($descripcion));
 
-            $transaccion = new Transaccion();
-            $transaccion->setBilletera($billetera);
-            $transaccion->setTipo('pago');
-            $transaccion->setMonto($pagoPendiente->getMonto());
-            $transaccion->setReferencia($sessionId);
-            $transaccion->setEstado('completada');
-            $transaccion->setFecha(new \DateTime());
+            $violations = $this->validator->validate($dto);
 
-            $pagoPendiente->setEstado('confirmado');
-            $pagoPendiente->setFechaConfirmacion(new \DateTime());
+            if (count($violations) > 0) {
+                return $this->generateStandardResponse(
+                    success: false,
+                    codError: ErrorCodes::CAMPOS_REQUERIDOS,
+                    messageError: (string) $violations[0]->getMessage(),
+                    data: null
+                );
+            }
 
-            $this->entityManager->persist($billetera);
-            $this->entityManager->persist($transaccion);
+            $cliente = $this->clienteRepository->find($dto->getClienteId());
+
+            if (!$cliente) {
+                return $this->generateStandardResponse(
+                    success: false,
+                    codError: ErrorCodes::CLIENTE_NO_ENCONTRADO,
+                    messageError: 'Cliente no encontrado',
+                    data: null
+                );
+            }
+
+            $billetera = $this->billeteraRepository->findByClienteId($cliente->getId());
+
+            if (!$billetera) {
+                return $this->generateStandardResponse(
+                    success: false,
+                    codError: ErrorCodes::CLIENTE_NO_ENCONTRADO,
+                    messageError: 'Billetera no encontrada para el cliente',
+                    data: null
+                );
+            }
+
+            if ((float)$billetera->getSaldo() < $dto->getMonto()) {
+                return $this->generateStandardResponse(
+                    success: false,
+                    codError: ErrorCodes::SALDO_INSUFICIENTE,
+                    messageError: 'Saldo insuficiente',
+                    data: null
+                );
+            }
+
+            $sessionId = Uuid::v4()->toRfc4122();
+            $token = (string)random_int(100000, 999999);
+            $expirationTime = (new \DateTime())->modify('+15 minutes');
+
+            $pagoPendiente = new PagoPendiente();
+            $pagoPendiente->setBilletera($billetera);
+            $pagoPendiente->setMonto(number_format($dto->getMonto(), 2, '.', ''));
+            $pagoPendiente->setDescripcion($dto->getDescripcion());
+            $pagoPendiente->setSessionId($sessionId);
+            $pagoPendiente->setToken($token);
+            $pagoPendiente->setEstado('pendiente');
+            $pagoPendiente->setFechaCreacion(new \DateTime());
+            $pagoPendiente->setFechaExpiracion($expirationTime);
+
             $this->entityManager->persist($pagoPendiente);
             $this->entityManager->flush();
-            $this->entityManager->commit();
 
-            return [
-                'status' => 'confirmado',
-                'monto' => $pagoPendiente->getMonto(),
-                'nuevoSaldo' => $nuevoSaldo,
-                'fecha' => $transaccion->getFecha()->format('Y-m-d H:i:s'),
-            ];
+            $email = (new Email())
+                ->from('noreply@epayco.local')
+                ->to($billetera->getCliente()->getEmail())
+                ->subject('Token de Confirmación de Pago - ePayco Wallet')
+                ->html(sprintf(
+                    '<h2>Confirmación de Pago</h2>
+                    <p>Token de confirmación: <strong style="font-size: 24px; color: #007bff;">%s</strong></p>
+                    <p>Monto: <strong>$%s</strong></p>
+                    <p>Descripción: %s</p>
+                    <p>Este token expira en 15 minutos</p>
+                    <p><em>No compartas este token con nadie</em></p>',
+                    $token,
+                    number_format($dto->getMonto(), 2),
+                    htmlspecialchars($dto->getDescripcion())
+                ));
+
+            try {
+                $this->mailer->send($email);
+            } catch (\Exception $e) {
+                return $this->generateStandardResponse(
+                    success: false,
+                    codError: ErrorCodes::ERROR_EMAIL,
+                    messageError: 'Error al enviar el email con el token: ' . $e->getMessage(),
+                    data: null
+                );
+            }
+
+            return $this->generateStandardResponse(
+                success: true,
+                codError: ErrorCodes::SUCCESS,
+                messageError: 'Pago iniciado. Token enviado al email.',
+                data: [
+                    'sessionId' => $sessionId,
+                    'monto' => $dto->getMonto(),
+                    'tiempoExpiracion' => '15 minutos',
+                    'mensajeEmail' => 'Se ha enviado un token de 6 dígitos a tu email'
+                ]
+            );
+        } catch (\Doctrine\DBAL\Exception $e) {
+            return $this->generateStandardResponse(
+                success: false,
+                codError: ErrorCodes::ERROR_BD,
+                messageError: 'Error al procesar pago: ' . $e->getMessage(),
+                data: null
+            );
         } catch (\Exception $e) {
-            $this->entityManager->rollback();
-            throw new \RuntimeException("Error al confirmar pago: " . $e->getMessage());
+            return $this->generateStandardResponse(
+                success: false,
+                codError: ErrorCodes::ERROR_BD,
+                messageError: 'Error al procesar pago: ' . $e->getMessage(),
+                data: null
+            );
         }
     }
 
-      public function consultarSaldo(int $clienteId): array
-      {
-          $billetera = $this->billeteraRepository->findByClienteId($clienteId);
-          if (!$billetera) {
-              throw new \RuntimeException("Billetera no encontrada");
+      public function confirmarPago(
+          string $sessionId,
+          string $token
+      ): array {
+          try {
+              $dto = new ConfirmarPagoDTO();
+              $dto->setSessionId(trim($sessionId));
+              $dto->setToken(trim($token));
+
+              $violations = $this->validator->validate($dto);
+
+              if (count($violations) > 0) {
+                  return $this->generateStandardResponse(
+                      success: false,
+                      codError: ErrorCodes::CAMPOS_REQUERIDOS,
+                      messageError: (string) $violations[0]->getMessage(),
+                      data: null
+                  );
+              }
+
+              $pagoPendiente = $this->pagoPendienteRepository->findBySessionId($dto->getSessionId());
+              if (!$pagoPendiente) {
+                  return $this->generateStandardResponse(
+                      success: false,
+                      codError: ErrorCodes::SESION_PAGO_NO_ENCONTRADA,
+                      messageError: 'Sesión de pago no encontrada',
+                      data: null
+                  );
+              }
+
+              if ($pagoPendiente->getFechaExpiracion() < new \DateTime()) {
+                  return $this->generateStandardResponse(
+                      success: false,
+                      codError: ErrorCodes::SESION_EXPIRADA,
+                      messageError: 'Sesión expirada',
+                      data: null
+                  );
+              }
+
+              if ($pagoPendiente->getToken() !== $dto->getToken()) {
+                  return $this->generateStandardResponse(
+                      success: false,
+                      codError: ErrorCodes::TOKEN_INCORRECTO,
+                      messageError: 'Token incorrecto',
+                      data: null
+                  );
+              }
+
+              $this->entityManager->beginTransaction();
+
+              $billetera = $pagoPendiente->getBilletera();
+              $nuevoSaldo = (float)$billetera->getSaldo() - (float)$pagoPendiente->getMonto();
+              $billetera->setSaldo(number_format($nuevoSaldo, 2, '.', ''));
+
+              $transaccion = new Transaccion();
+              $transaccion->setBilletera($billetera);
+              $transaccion->setTipo('pago');
+              $transaccion->setMonto(number_format($pagoPendiente->getMonto(), 2, '.', ''));
+              $transaccion->setReferencia($dto->getSessionId());
+              $transaccion->setEstado('completada');
+              $transaccion->setFecha(new \DateTime());
+
+              $pagoPendiente->setEstado('confirmado');
+              $pagoPendiente->setFechaConfirmacion(new \DateTime());
+
+              $this->entityManager->persist($billetera);
+              $this->entityManager->persist($transaccion);
+              $this->entityManager->persist($pagoPendiente);
+              $this->entityManager->flush();
+              $this->entityManager->commit();
+
+              return $this->generateStandardResponse(
+                  success: true,
+                  codError: ErrorCodes::SUCCESS,
+                  messageError: 'Pago confirmado exitosamente',
+                  data: [
+                      'transaccionId' => $transaccion->getId(),
+                      'monto' => $transaccion->getMonto(),
+                      'nuevoSaldo' => $billetera->getSaldo(),
+                      'fecha' => $transaccion->getFecha()->format('Y-m-d H:i:s'),
+                  ]
+              );
+          } catch (\Doctrine\DBAL\Exception $e) {
+              if ($this->entityManager->getConnection()->isTransactionActive()) {
+                  $this->entityManager->rollback();
+              }
+              return $this->generateStandardResponse(
+                  success: false,
+                  codError: ErrorCodes::ERROR_BD,
+                  messageError: 'Error al confirmar pago: ' . $e->getMessage(),
+                  data: null
+              );
+          } catch (\Exception $e) {
+              if ($this->entityManager->getConnection()->isTransactionActive()) {
+                  $this->entityManager->rollback();
+              }
+              return $this->generateStandardResponse(
+                  success: false,
+                  codError: ErrorCodes::ERROR_BD,
+                  messageError: 'Error al confirmar pago: ' . $e->getMessage(),
+                  data: null
+              );
           }
-
-          $transacciones = $this->transaccionRepository->findByBilleteraId($billetera->getId());
-
-          return [
-              'saldo' => $billetera->getSaldo(),
-              'fechaUltimaActualizacion' => $billetera->getFechaActualizacion()?->format('Y-m-d H:i:s'),
-              'totalTransacciones' => count($transacciones),
-              'cliente' => [
-                  'id' => $billetera->getCliente()->getId(),
-                  'nombres' => $billetera->getCliente()->getNombres(),
-                  'apellidos' => $billetera->getCliente()->getApellidos(),
-                  'email' => $billetera->getCliente()->getEmail(),
-              ],
-          ];
       }
+
+     public function consultarSaldo(int $clienteId): array
+     {
+         try {
+             $billetera = $this->billeteraRepository->findByClienteId($clienteId);
+             if (!$billetera) {
+                 return $this->generateStandardResponse(
+                     success: false,
+                     codError: ErrorCodes::CLIENTE_NO_ENCONTRADO,
+                     messageError: 'Billetera no encontrada',
+                     data: null
+                 );
+             }
+
+             $transacciones = $this->transaccionRepository->findByBilleteraId($billetera->getId());
+
+             return $this->generateStandardResponse(
+                 success: true,
+                 codError: ErrorCodes::SUCCESS,
+                 messageError: 'Consulta realizada exitosamente',
+                 data: [
+                     'saldo' => $billetera->getSaldo(),
+                     'fechaUltimaActualizacion' => $billetera->getFechaActualizacion()?->format('Y-m-d H:i:s'),
+                     'totalTransacciones' => count($transacciones),
+                     'cliente' => [
+                         'id' => $billetera->getCliente()->getId(),
+                         'nombres' => $billetera->getCliente()->getNombres(),
+                         'apellidos' => $billetera->getCliente()->getApellidos(),
+                         'email' => $billetera->getCliente()->getEmail(),
+                     ],
+                 ]
+             );
+         } catch (\Exception $e) {
+             return $this->generateStandardResponse(
+                 success: false,
+                 codError: ErrorCodes::ERROR_BD,
+                 messageError: 'Error al consultar saldo: ' . $e->getMessage(),
+                 data: null
+             );
+         }
+     }
 
         private function generateStandardResponse(bool $success, string $codError, string $messageError, $data = null): array
         {
