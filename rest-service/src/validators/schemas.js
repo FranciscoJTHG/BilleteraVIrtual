@@ -74,15 +74,19 @@ const confirmarPagoSchema = Joi.object({
 });
 
 const consultarSaldoSchema = Joi.object({
-  clienteId: Joi.number().integer().positive().optional().messages({
+  clienteId: Joi.number().integer().positive().required().messages({
     'number.base': 'clienteId debe ser un número',
-    'number.positive': 'clienteId debe ser positivo'
+    'number.positive': 'clienteId debe ser positivo',
+    'any.required': 'clienteId es requerido'
   }),
   documento: Joi.string().required().trim().messages({
     'string.empty': 'documento es requerido',
     'any.required': 'documento es requerido'
   }),
-  celular: Joi.string().optional().trim()
+  celular: Joi.string().required().trim().messages({
+    'string.empty': 'celular es requerido',
+    'any.required': 'celular es requerido'
+  })
 });
 
 module.exports = {

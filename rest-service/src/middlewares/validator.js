@@ -3,7 +3,8 @@ const validate = (schema) => {
     const dataToValidate = req.method === 'GET' ? req.query : req.body;
     const { error, value } = schema.validate(dataToValidate, {
       abortEarly: false,
-      stripUnknown: true
+      stripUnknown: true,
+      convert: true
     });
 
     if (error) {
