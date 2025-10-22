@@ -7,6 +7,9 @@ security:
         dev:
             pattern: ^/(_(profiler|wdt)|css|images|js)/
             security: false
+        soap:
+            pattern: ^/soap
+            security: false
         main:
             lazy: true
             provider: users_in_memory
