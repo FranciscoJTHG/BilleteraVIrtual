@@ -21,6 +21,7 @@ use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
+use Psr\Log\LoggerInterface;
 
 class WalletService
 {
@@ -32,6 +33,7 @@ class WalletService
         private PagoPendienteRepository $pagoPendienteRepository,
         private MailerInterface $mailer,
         private ValidatorInterface $validator,
+        private LoggerInterface $logger,
     ) {}
 
     public function registroCliente(
@@ -142,17 +144,20 @@ class WalletService
     }
 
     public function recargaBilletera(
-        ?int $clienteId,
+        int $clienteId,
         string $documento,
-        string $numeroCelular,
-        float $valor
+        string $celular,
+        float $monto,
+        string $referencia
     ): array {
         try {
+            // Paso 1: Crear y validar DTO
             $dto = new RecargaBilleteraDTO();
             $dto->setClienteId($clienteId);
             $dto->setDocumento(trim($documento));
-            $dto->setNumeroCelular(trim($numeroCelular));
-            $dto->setValor($valor);
+            $dto->setCelular(trim($celular));
+            $dto->setMonto($monto);
+            $dto->setReferencia(trim($referencia));
 
             $violations = $this->validator->validate($dto);
 
@@ -160,11 +165,12 @@ class WalletService
                 return $this->generateStandardResponse(
                     success: false,
                     codError: ErrorCodes::CAMPOS_REQUERIDOS,
-                    messageError: (string) $violations[0]->getMessage(),
+                    messageError: 'Campos requeridos inválidos: ' . (string) $violations,
                     data: null
                 );
             }
 
+            // Paso 2: Buscar cliente por clienteId
             $cliente = $this->clienteRepository->find($clienteId);
 
             if (!$cliente) {
@@ -176,6 +182,17 @@ class WalletService
                 );
             }
 
+            // Paso 3: Validar que documento y celular coincidan con el cliente
+            if ($cliente->getNumeroDocumento() !== trim($documento) || $cliente->getCelular() !== trim($celular)) {
+                return $this->generateStandardResponse(
+                    success: false,
+                    codError: ErrorCodes::DATOS_INCORRECTOS,
+                    messageError: 'Los datos de documento y celular no coinciden con el cliente',
+                    data: null
+                );
+            }
+
+            // Paso 4: Obtener billetera
             $billetera = $this->billeteraRepository->findByClienteId($cliente->getId());
             if (!$billetera) {
                 return $this->generateStandardResponse(
@@ -186,16 +203,17 @@ class WalletService
                 );
             }
 
+            // Paso 5: Procesar recarga
             $this->entityManager->beginTransaction();
-
-            $nuevoSaldo = (float)$billetera->getSaldo() + $dto->getValor();
+            
+            $nuevoSaldo = (float)$billetera->getSaldo() + $dto->getMonto();
             $billetera->setSaldo(number_format($nuevoSaldo, 2, '.', ''));
 
             $transaccion = new Transaccion();
             $transaccion->setBilletera($billetera);
             $transaccion->setTipo('recarga');
-            $transaccion->setMonto(number_format($dto->getValor(), 2, '.', ''));
-            $transaccion->setReferencia('RECARGA-' . uniqid());
+            $transaccion->setMonto(number_format($dto->getMonto(), 2, '.', ''));
+            $transaccion->setReferencia($dto->getReferencia());
             $transaccion->setEstado('completada');
             $transaccion->setFecha(new \DateTime());
 
@@ -204,6 +222,7 @@ class WalletService
             $this->entityManager->flush();
             $this->entityManager->commit();
 
+            // Paso 6: Retornar respuesta exitosa
             return $this->generateStandardResponse(
                 success: true,
                 codError: ErrorCodes::SUCCESS,
@@ -211,7 +230,8 @@ class WalletService
                 data: [
                     'transaccionId' => $transaccion->getId(),
                     'nuevoSaldo' => $billetera->getSaldo(),
-                    'valor' => $transaccion->getMonto(),
+                    'monto' => $transaccion->getMonto(),
+                    'referencia' => $transaccion->getReferencia(),
                     'fecha' => $transaccion->getFecha()->format('Y-m-d H:i:s')
                 ]
             );
@@ -222,7 +242,7 @@ class WalletService
             return $this->generateStandardResponse(
                 success: false,
                 codError: ErrorCodes::ERROR_BD,
-                messageError: 'Error al procesar recarga: ' . $e->getMessage(),
+                messageError: 'Error de base de datos al procesar recarga: ' . $e->getMessage(),
                 data: null
             );
         } catch (\Exception $e) {
@@ -308,6 +328,13 @@ class WalletService
             $this->entityManager->persist($pagoPendiente);
             $this->entityManager->flush();
 
+            $this->logger->info('Intentando enviar email de pago', [
+                'clienteEmail' => $billetera->getCliente()->getEmail(),
+                'token' => $token,
+                'monto' => $dto->getMonto(),
+                'sessionId' => $sessionId,
+            ]);
+
             $email = (new Email())
                 ->from('noreply@epayco.local')
                 ->to($billetera->getCliente()->getEmail())
@@ -325,7 +352,9 @@ class WalletService
                 ));
 
             try {
+                $this->logger->info('Enviando email...');
                 $this->mailer->send($email);
+                $this->logger->info('Email enviado exitosamente');
             } catch (\Exception $e) {
                 return $this->generateStandardResponse(
                     success: false,

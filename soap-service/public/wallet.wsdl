@@ -63,8 +63,9 @@
     <message name="recargaBilleteraRequest">
         <part name="clienteId" type="xsd:int"/>
         <part name="documento" type="xsd:string"/>
-        <part name="numeroCelular" type="xsd:string"/>
-        <part name="valor" type="xsd:decimal"/>
+        <part name="celular" type="xsd:string"/>
+        <part name="monto" type="xsd:decimal"/>
+        <part name="referencia" type="xsd:string"/>
     </message>
     <message name="recargaBilleteraResponse">
         <part name="response" type="tns:StandardResponse"/>
@@ -89,9 +90,11 @@
 
     <message name="consultarSaldoRequest">
         <part name="clienteId" type="xsd:int"/>
+        <part name="documento" type="xsd:string"/>
+        <part name="celular" type="xsd:string"/>
     </message>
     <message name="consultarSaldoResponse">
-        <part name="response" type="tns:SaldoResponse"/>
+        <part name="response" type="tns:StandardResponse"/>
     </message>
 
     <!-- Port Type -->

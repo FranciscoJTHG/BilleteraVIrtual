@@ -11,6 +11,33 @@ Sistema de billetera virtual que permite a los usuarios:
 - 📊 Consultar saldo disponible
 - 📝 Historial de transacciones
 
+### 🚦 Guía Rápida de Inicio (5 minutos)
+
+```bash
+# 1. Clonar y posicionarse
+git clone <URL-del-repositorio>
+cd BilleteraVirtual
+
+# 2. Levantar servicios
+docker-compose up -d
+
+# 3. Esperar health checks (30-60 segundos)
+sleep 30
+docker-compose ps
+
+# 4. Ejecutar migraciones
+docker exec -it epayco-soap php bin/console doctrine:migrations:migrate --no-interaction
+
+# 5. Verificar logs
+docker-compose logs -f epayco-soap
+
+# 6. Listo para usar ✅
+# - REST API: http://localhost:3000
+# - SOAP WSDL: http://localhost:8000/soap/wsdl
+# - MailHog: http://localhost:8025
+# - MySQL: localhost:3306 (usuario: epayco / contraseña: epayco123)
+```
+
 ---
 
 ## 🏗️ Arquitectura del Sistema
@@ -93,6 +120,58 @@ docker-compose ps
 ```
 
 Todos los servicios deben estar en estado **healthy** ✅
+
+---
+
+## 🔍 Revisión de Logs y Monitoreo
+
+### Ver logs de todos los servicios en tiempo real
+
+```bash
+docker-compose logs -f
+```
+
+### Ver logs de servicios específicos
+
+```bash
+# Logs del servicio SOAP
+docker-compose logs -f epayco-soap
+
+# Logs del servicio REST
+docker-compose logs -f epayco-rest
+
+# Logs de MySQL
+docker-compose logs -f epayco-db
+
+# Logs de MailHog
+docker-compose logs -f mailhog
+```
+
+### Ver últimas N líneas de logs
+
+```bash
+# Últimas 50 líneas
+docker-compose logs --tail=50 epayco-soap
+
+# Últimas 100 líneas
+docker-compose logs --tail=100 epayco-rest
+```
+
+### Monitoreo en tiempo real
+
+```bash
+# Ver uso de recursos de contenedores
+docker stats
+
+# Ver estado de un contenedor específico
+docker inspect --format='{{json .State.Health}}' epayco-soap | jq
+
+# Verificar conectividad SOAP desde REST
+docker exec -it epayco-rest curl http://epayco-soap:8000/soap/wsdl
+
+# Verificar conectividad MySQL
+docker exec -it epayco-soap php bin/console doctrine:query:dql "SELECT COUNT(c) FROM App\\Entity\\Cliente c"
+```
 
 ---
 
@@ -350,23 +429,125 @@ Todas las respuestas siguen el siguiente formato:
 
 ---
 
+## 🧬 Testing con Insomnia (SOAP)
+
+### Configurar request SOAP en Insomnia
+
+#### Pasos para consultar saldo:
+
+1. **Crear nueva request**
+   - Método: POST
+   - URL: `http://localhost:8000/soap`
+
+2. **Headers**
+   ```
+   Content-Type: text/xml
+   ```
+
+3. **Body (XML)**
+   ```xml
+   <?xml version="1.0" encoding="UTF-8"?>
+   <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:web="http://epayco.com/wallet">
+       <soap:Body>
+           <web:consultarSaldo>
+               <web:clienteId>1</web:clienteId>
+               <web:documento>1234567890</web:documento>
+               <web:celular>3001234567</web:celular>
+           </web:consultarSaldo>
+       </soap:Body>
+   </soap:Envelope>
+   ```
+
+4. **Reemplazar valores**
+   - `clienteId`: ID del cliente registrado
+   - `documento`: Documento del cliente
+   - `celular`: Celular del cliente (debe coincidir con documento)
+
+5. **Enviar** (Ctrl+Enter)
+
+#### Respuesta exitosa:
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tns="http://epayco.com/wallet">
+    <soap:Body>
+        <tns:consultarSaldoResponse>
+            <tns:response>
+                <tns:success>true</tns:success>
+                <tns:cod_error>00</tns:cod_error>
+                <tns:message_error>Consulta realizada exitosamente</tns:message_error>
+                <tns:data>
+                    <saldo>50000.00</saldo>
+                    <fechaUltimaActualizacion>2025-10-22 16:30:00</fechaUltimaActualizacion>
+                    <totalTransacciones>2</totalTransacciones>
+                    <cliente>
+                        <id>1</id>
+                        <nombres>Juan Pérez</nombres>
+                        <apellidos>García</apellidos>
+                        <email>juan@example.com</email>
+                    </cliente>
+                </tns:data>
+            </tns:response>
+        </tns:consultarSaldoResponse>
+    </soap:Body>
+</soap:Envelope>
+```
+
+#### Respuesta con error (documento/celular no coinciden):
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" xmlns:tns="http://epayco.com/wallet">
+    <soap:Body>
+        <tns:consultarSaldoResponse>
+            <tns:response>
+                <tns:success>false</tns:success>
+                <tns:cod_error>04</tns:cod_error>
+                <tns:message_error>Los datos de documento y celular no coinciden con el cliente</tns:message_error>
+                <tns:data/>
+            </tns:response>
+        </tns:consultarSaldoResponse>
+    </soap:Body>
+</soap:Envelope>
+```
+
+**⚠️ Importante:** Los valores de `documento` y `celular` deben coincidir exactamente con los registrados en la base de datos.
+
+---
+
 ## 🧪 Testing con Postman
+
+### ✅ Colección Postman Disponible
+
+La colección completa con todos los 5 servicios está disponible en:  
+**`docs/Epayco-Wallet.postman_collection.json`**
+
+📖 **Guía Completa:** Ver `docs/POSTMAN_COLLECTION.md` para instrucciones detalladas.
 
 ### Importar Colección
 
 1. Abrir **Postman**
-2. Click en **Import**
+2. Click en **Import** (o `Ctrl+O`)
 3. Seleccionar: `docs/Epayco-Wallet.postman_collection.json`
-4. Listo para hacer pruebas
+4. Listo para hacer pruebas ✅
+
+### Características de la Colección
+
+- ✅ **5 Servicios SOAP** con múltiples casos de prueba
+- ✅ **Tests Automatizados** en cada request
+- ✅ **Variables de Entorno** preconfiguras
+- ✅ **Casos de Error** documentados
+- ✅ **Ejemplos de Respuesta** para cada endpoint
+- ✅ **Integración MailHog** para ver tokens de email
 
 ### Flujo de Prueba Recomendado
 
 1. **Registro Cliente** → Crear nueva cuenta
 2. **Recarga Billetera** → Agregar $50,000
 3. **Pagar** → Iniciar transacción de $25,000
-4. **Ver Email en MailHog** → http://localhost:8025
+4. **Ver Email en MailHog** → http://localhost:8025 (copiar token)
 5. **Confirmar Pago** → Usar token del email
 6. **Consultar Saldo** → Verificar $25,000
+
+**Tiempo estimado:** 5-10 minutos para flujo completo
 
 ---
 
@@ -388,15 +569,11 @@ Los tokens de confirmación se envían por email. Para verlos:
 # Iniciar servicios
 docker-compose up -d
 
-# Ver estado
+# Ver estado de todos los servicios
 docker-compose ps
 
-# Ver logs de todos
-docker-compose logs -f
-
-# Ver logs de servicio específico
-docker-compose logs -f soap-service
-docker-compose logs -f rest-service
+# Iniciar servicios con salida en consola
+docker-compose up
 
 # Detener servicios
 docker-compose down
@@ -406,6 +583,9 @@ docker-compose down -v
 
 # Reconstruir imágenes
 docker-compose up -d --build
+
+# Ver eventos en tiempo real
+docker-compose events
 ```
 
 ### Ejecutar Comandos en Contenedores
@@ -417,27 +597,66 @@ docker exec -it epayco-soap php bin/console doctrine:migrations:migrate
 # Estado de migraciones
 docker exec -it epayco-soap php bin/console doctrine:migrations:status
 
-# Acceder a MySQL
+# Generar nueva migración (si cambias entities)
+docker exec -it epayco-soap php bin/console doctrine:migrations:diff
+
+# Acceder a MySQL CLI
 docker exec -it epayco-db mysql -uepayco -pepayco123 epayco_wallet
 
-# Ver logs MySQL
-docker exec -it epayco-db mysql -uepayco -pepayco123 -e "SELECT * FROM clientes;"
+# Ver clientes registrados
+docker exec -it epayco-db mysql -uepayco -pepayco123 epayco_wallet -e "SELECT id, numeroDocumento, nombres, email, celular FROM clientes;"
 
-# Reiniciar un servicio
-docker-compose restart soap-service
+# Ver billetes y saldos
+docker exec -it epayco-db mysql -uepayco -pepayco123 epayco_wallet -e "SELECT b.id, b.cliente_id, b.saldo FROM billetes b;"
+
+# Ver transacciones
+docker exec -it epayco-db mysql -uepayco -pepayco123 epayco_wallet -e "SELECT * FROM transacciones ORDER BY fecha DESC LIMIT 10;"
+
+# Reiniciar un servicio específico
+docker-compose restart epayco-soap
+docker-compose restart epayco-rest
+docker-compose restart epayco-db
 ```
 
-### Monitoreo
+### Monitoreo y Debugging
 
 ```bash
 # Ver uso de recursos en tiempo real
 docker stats
 
-# Verificar health status
+# Verificar health status de un servicio
 docker inspect --format='{{json .State.Health}}' epayco-soap | jq
 
-# Ver configuración de contenedor
-docker inspect epayco-soap
+# Ver logs del último reinicio
+docker-compose logs --since 1m epayco-soap
+
+# Ejecutar prueba de conectividad
+docker exec -it epayco-rest curl -v http://epayco-soap:8000/soap/wsdl
+
+# Obtener IP del contenedor
+docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' epayco-soap
+
+# Ver variables de entorno del contenedor
+docker exec epayco-soap env | grep DATABASE
+
+# Verificar espacio en disco usado por Docker
+docker system df
+```
+
+### Limpiar Recursos
+
+```bash
+# Eliminar contenedores detenidos
+docker container prune
+
+# Eliminar imágenes sin usar
+docker image prune
+
+# Eliminar volúmenes sin usar
+docker volume prune
+
+# Limpiar todo (⚠️ elimina contenedores, imágenes, redes, volúmenes)
+docker system prune -a --volumes
 ```
 
 ---
@@ -524,12 +743,33 @@ docker exec -it epayco-soap php bin/phpunit
 # - RegistroClienteTest (integration)
 #   ✅ Registro exitoso de cliente
 #   ✅ Creación automática de billetera
-# - RecargaBilleteraTest (integration)
-#   ✅ Recarga de saldo
-#   ✅ Validación de datos
+# - RecargaBilleteraTest (6 integration tests) - NUEVA
+#   ✅ Happy Path - Recarga Exitosa
+#   ✅ Actualización de Saldo
+#   ✅ Creación de Transacción
+#   ✅ Persistencia en Base de Datos
+#   ✅ Cliente No Encontrado
+#   ✅ Múltiples Recargas
+# - PagarTest (3 integration tests)
+#   ✅ Happy Path - Pago Exitoso
+#   ✅ Saldo Insuficiente
+#   ✅ Creación de PagoPendiente en BD
+# - ConfirmarPagoTest (6 integration tests) - NUEVA
+#   ✅ Happy Path - Confirmación Exitosa
+#   ✅ Actualización de Saldo Después de Confirmación
+#   ✅ Creación de Transacción de Pago
+#   ✅ Sesión de Pago No Encontrada
+#   ✅ Token Incorrecto
+#   ✅ Sesión Expirada
+# - ConsultarSaldoTest (5 integration tests) - NUEVA
+#   ✅ Happy Path - Consulta Exitosa
+#   ✅ Saldo Cero Inicial
+#   ✅ Historial de Transacciones
+#   ✅ Cliente No Encontrado
+#   ✅ Información del Cliente Correcta
 ```
 
-**Estado Actual:** ✅ 30/30 tests pasando
+**Estado Actual:** ✅ 44/44 tests pasando (FASE 2 completada)
 
 ---
 
@@ -782,10 +1022,11 @@ Para reportar bugs o sugerir mejoras, por favor abre un issue en el repositorio.
 | Flujo de Pago | ✅ COMPLETADO | Con token por email + confirmación |
 | Consulta de Saldo | ✅ COMPLETADO | En tiempo real |
 | ValidatorInterface | ✅ COMPLETADO | Autowiring en WalletService |
-| Tests Unitarios | ✅ COMPLETADO | 30/30 pasando |
+| Tests Unitarios | ✅ COMPLETADO | 44/44 pasando (FASE 2 completada) |
 | Constraints en Entities | ✅ COMPLETADO | Validación de Cliente, Transaccion, PagoPendiente |
 | Docker Health Checks | ✅ COMPLETADO | Todos los servicios saludables |
-| Migraciones Doctrine | ✅ COMPLETADO | 3 versiones (estructura + ajustes) |
+| Migraciones Doctrine | ✅ COMPLETADO | 5 versiones con todas las entidades |
+| **Colección Postman** | ✅ **NUEVO** | 5 servicios con casos de prueba + documentación |
 
 ### Servicios Activos
 
@@ -796,21 +1037,44 @@ Para reportar bugs o sugerir mejoras, por favor abre un issue en el repositorio.
 ✅ MailHog (Email Testing)       - Puerto 8025
 ```
 
-### Últimas Mejoras (Sesión Actual)
+### Últimas Mejoras (Sesión Actual - FASE 2 + Postman)
 
-1. **ValidatorInterface Autowiring**
-   - Resuelto namespace incorrecto en `WalletService`
-   - Cambio: `ValidatorInterface` → `Validator\ValidatorInterface`
-   - Binding específico en `services.yaml` para `WalletService`
+1. **Creación de Colección Postman Completa** ✅
+   - `docs/Epayco-Wallet.postman_collection.json` (Colección con 5 servicios)
+   - Tests automatizados en cada request
+   - Variables de entorno preconfiguras
+   - Casos de éxito y error documentados
 
-2. **Permisos Docker**
-   - Agregado `chmod -R 777 config` en Dockerfile
-   - Permite escritura en directorio config necesaria para debug
+2. **Documentación Postman** ✅
+   - `docs/POSTMAN_COLLECTION.md` - Guía completa de uso
+   - Flujos de prueba paso a paso
+   - Ejemplos de respuesta para cada endpoint
+   - Solución de problemas
 
-3. **Validación de Constraints**
-   - 12 tests de validación en `ClienteConstraintsTest`
-   - Todos los Constraints funcionando correctamente
+3. **Actualización README** ✅
+   - Referencia a colección Postman
+   - Instrucciones de importación
+   - Características de la colección
 
-**Última actualización:** Octubre 2025  
-**Versión:** 1.0.0  
-**Estado:** 🟢 Producción Ready
+### Archivos Agregados en Sesión Actual
+
+| Archivo | Descripción | Estado |
+|---------|-------------|--------|
+| `docs/Epayco-Wallet.postman_collection.json` | Colección Postman completa | ✅ NUEVO |
+| `docs/POSTMAN_COLLECTION.md` | Guía de uso de Postman | ✅ NUEVO |
+
+### Flujos Testeados
+
+**Flujo Completo (End-to-End):**
+```
+1. Registrar Cliente → 2. Recargar Billetera → 3. Iniciar Pago 
+→ 4. Obtener Token (Email) → 5. Confirmar Pago → 6. Consultar Saldo
+```
+
+**Casos de Error:**
+- ✅ Cliente duplicado (email/documento)
+- ✅ Cliente no encontrado
+- ✅ Saldo insuficiente
+- ✅ Sesión no encontrada
+- ✅ Token incorrecto
+- ✅ Sesión expirada
