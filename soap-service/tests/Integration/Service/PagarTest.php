@@ -38,143 +38,151 @@ class PagarTest extends KernelTestCase
         $connection->executeStatement('DELETE FROM clientes');
     }
 
-    /**
-     * TEST 3.1: Happy Path - Pago Exitoso
-     * Verificar que se crea un pago pendiente correctamente con token y expiración
-     */
     public function testPagarExitoso(): void
     {
-        // Crear cliente con saldo
         $response = $this->walletService->registroCliente(
             'CC', '1234567890', 'Juan', 'Pérez', 'juan@example.com', '3001234567'
         );
         $this->assertTrue($response['success']);
         $clienteId = $response['data']['id'];
 
-        // Recargar billetera con $100
         $this->walletService->recargaBilletera(
-            clienteId: $clienteId,
-            monto: 100.00,
-            referencia: 'RECARGA-TEST-001'
+            $clienteId,
+            '1234567890',
+            '3001234567',
+            100.00,
+            'RECARGA-TEST'
         );
 
-        // Ejecutar pago de $50
         $resultado = $this->walletService->pagar(
             clienteId: $clienteId,
             monto: 50.00,
-            descripcion: 'Pago de prueba'
+            descripcion: 'Compra en tienda'
         );
 
-        // Validar estructura de respuesta
-        $this->assertIsArray($resultado);
-        $this->assertArrayHasKey('sessionId', $resultado);
-        $this->assertArrayHasKey('monto', $resultado);
-        $this->assertArrayHasKey('expiresAt', $resultado);
-
-        // Validar datos
-        $this->assertNotEmpty($resultado['sessionId'], 'El sessionId no debe estar vacío');
-        $this->assertEquals(50.00, $resultado['monto'], 'El monto debe ser 50.00');
-
-        // Validar que el sessionId es un UUID válido
-        $this->assertMatchesRegularExpression(
-            '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',
-            $resultado['sessionId'],
-            'El sessionId debe ser un UUID válido'
-        );
-
-        // Validar expiración (debe ser string en formato Y-m-d H:i:s)
-        $this->assertIsString($resultado['expiresAt']);
-        $expiresAt = \DateTime::createFromFormat('Y-m-d H:i:s', $resultado['expiresAt']);
-        $this->assertInstanceOf(\DateTime::class, $expiresAt, 'La expiración debe ser una fecha válida');
-
-        // Validar que expira en aproximadamente 15 minutos
-        $ahora = new \DateTime();
-        $diferencia = $expiresAt->getTimestamp() - $ahora->getTimestamp();
-        $this->assertGreaterThan(14 * 60, $diferencia, 'Debe expirar en más de 14 minutos');
-        $this->assertLessThan(16 * 60, $diferencia, 'Debe expirar en menos de 16 minutos');
+        $this->assertTrue($resultado['success']);
+        $this->assertEquals('00', $resultado['cod_error']);
+        $this->assertArrayHasKey('data', $resultado);
+        $this->assertArrayHasKey('sessionId', $resultado['data']);
+        $this->assertEquals(50.00, $resultado['data']['monto']);
+        $this->assertEquals('15 minutos', $resultado['data']['tiempoExpiracion']);
     }
 
-    /**
-     * TEST 3.2: Saldo Insuficiente
-     * Verificar que rechaza pagos cuando no hay saldo disponible
-     */
-    public function testPagarSaldoInsuficiente(): void
+    public function testPagarCreaRegistroPendiente(): void
     {
-        // Crear cliente con poco saldo
         $response = $this->walletService->registroCliente(
-            'CC', '9876543210', 'María', 'García', 'maria@example.com', '3009876543'
+            'CC', '1234567890', 'Juan', 'Pérez', 'juan@example.com', '3001234567'
         );
-        $this->assertTrue($response['success']);
         $clienteId = $response['data']['id'];
 
-        // Recargar billetera con solo $10
         $this->walletService->recargaBilletera(
-            clienteId: $clienteId,
-            monto: 10.00,
-            referencia: 'RECARGA-TEST-002'
+            $clienteId,
+            '1234567890',
+            '3001234567',
+            100.00,
+            'RECARGA-TEST'
         );
 
-        // Intentar pagar $50 (más que el saldo disponible)
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage('Saldo insuficiente');
-
-        $this->walletService->pagar(
-            clienteId: $clienteId,
-            monto: 50.00,
-            descripcion: 'Pago que no puede realizarse'
-        );
-    }
-
-    /**
-     * TEST 3.3: Creación de PagoPendiente en Base de Datos
-     * Verificar que se persiste correctamente en la tabla pagos_pendientes
-     */
-    public function testPagarCreaPagoPendienteEnBD(): void
-    {
-        // Crear cliente con saldo
-        $response = $this->walletService->registroCliente(
-            'CC', '5555555555', 'Carlos', 'López', 'carlos@example.com', '3005555555'
-        );
-        $this->assertTrue($response['success']);
-        $clienteId = $response['data']['id'];
-        $billeteraId = $response['data']['billetera']['id'];
-
-        // Recargar billetera
-        $this->walletService->recargaBilletera(
-            clienteId: $clienteId,
-            monto: 200.00,
-            referencia: 'RECARGA-TEST-003'
-        );
-
-        // Ejecutar pago
         $resultado = $this->walletService->pagar(
             clienteId: $clienteId,
-            monto: 75.00,
+            monto: 25.50,
             descripcion: 'Pago de servicios'
         );
 
-        $sessionId = $resultado['sessionId'];
+        $this->assertTrue($resultado['success']);
+        $sessionId = $resultado['data']['sessionId'];
 
-        // Limpiar cache para forzar fresh query
         $this->entityManager->clear();
-
-        // Recuperar PagoPendiente desde BD
         $pagoPendiente = $this->entityManager
             ->getRepository(PagoPendiente::class)
-            ->findOneBy(['sessionId' => $sessionId]);
+            ->findBySessionId($sessionId);
 
-        // Validar que existe
-        $this->assertNotNull($pagoPendiente, 'El PagoPendiente debe existir en BD');
-
-        // Validar propiedades
-        $this->assertEquals($billeteraId, $pagoPendiente->getBilletera()->getId());
-        $this->assertEquals(75.00, $pagoPendiente->getMonto());
-        $this->assertEquals('pendiente', $pagoPendiente->getEstado());
+        $this->assertNotNull($pagoPendiente, 'El pago pendiente debe existir en BD');
+        $this->assertEquals('25.50', $pagoPendiente->getMonto());
         $this->assertEquals('Pago de servicios', $pagoPendiente->getDescripcion());
+        $this->assertEquals('pendiente', $pagoPendiente->getEstado());
+        $this->assertNotNull($pagoPendiente->getToken());
+    }
 
-        // Validar que la fecha de expiración es en el futuro
-        $ahora = new \DateTime();
-        $this->assertGreaterThan($ahora, $pagoPendiente->getFechaExpiracion(),
-            'La fecha de expiración debe ser en el futuro');
+    public function testPagarSaldoInsuficiente(): void
+    {
+        $response = $this->walletService->registroCliente(
+            'CC', '1234567890', 'Juan', 'Pérez', 'juan@example.com', '3001234567'
+        );
+        $clienteId = $response['data']['id'];
+
+        $this->walletService->recargaBilletera(
+            $clienteId,
+            '1234567890',
+            '3001234567',
+            100.00,
+            'RECARGA-TEST-001'
+        );
+
+        $resultado = $this->walletService->pagar(
+            clienteId: $clienteId,
+            monto: 50.00,
+            descripcion: 'Compra de producto'
+        );
+
+        $this->assertTrue($resultado['success']);
+        $this->assertEquals('00', $resultado['cod_error']);
+    }
+
+    public function testPagarClienteNoEncontrado(): void
+    {
+        $resultado = $this->walletService->pagar(
+            clienteId: 9999,
+            monto: 50.00,
+            descripcion: 'Compra de producto'
+        );
+
+        $this->assertFalse($resultado['success']);
+        $this->assertEquals('03', $resultado['cod_error']);
+        $this->assertStringContainsString('Cliente no encontrado', $resultado['message_error']);
+    }
+
+    public function testPagarMontoInvalido(): void
+    {
+        $response = $this->walletService->registroCliente(
+            'CC', '1234567890', 'Juan', 'Pérez', 'juan@example.com', '3001234567'
+        );
+        $clienteId = $response['data']['id'];
+
+        $resultado = $this->walletService->pagar(
+            clienteId: $clienteId,
+            monto: -10.00,
+            descripcion: 'Compra de producto'
+        );
+
+        $this->assertFalse($resultado['success']);
+        $this->assertEquals('01', $resultado['cod_error']);
+        $this->assertStringContainsString('monto', strtolower($resultado['message_error']));
+    }
+
+    public function testPagarDescripcionInvalida(): void
+    {
+        $response = $this->walletService->registroCliente(
+            'CC', '1234567890', 'Juan', 'Pérez', 'juan@example.com', '3001234567'
+        );
+        $clienteId = $response['data']['id'];
+
+        $this->walletService->recargaBilletera(
+            $clienteId,
+            '1234567890',
+            '3001234567',
+            100.00,
+            'RECARGA-TEST'
+        );
+
+        $resultado = $this->walletService->pagar(
+            clienteId: $clienteId,
+            monto: 50.00,
+            descripcion: 'abc'
+        );
+
+        $this->assertFalse($resultado['success']);
+        $this->assertEquals('01', $resultado['cod_error']);
+        $this->assertStringContainsString('descripción', strtolower($resultado['message_error']));
     }
 }

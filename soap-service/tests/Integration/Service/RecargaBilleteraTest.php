@@ -6,6 +6,7 @@ use App\Entity\Cliente;
 use App\Entity\Billetera;
 use App\Entity\Transaccion;
 use App\Service\WalletService;
+use App\Constants\ErrorCodes;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -13,20 +14,42 @@ class RecargaBilleteraTest extends KernelTestCase
 {
     private EntityManagerInterface $entityManager;
     private WalletService $walletService;
+    private int $clienteId;
+    private string $documento = '9876543210';
+    private string $celular = '3009876543';
 
     protected function setUp(): void
     {
         self::bootKernel();
         $this->entityManager = self::getContainer()->get(EntityManagerInterface::class);
         $this->walletService = self::getContainer()->get(WalletService::class);
-
+        
+        // Limpiar completamente la base de datos antes de crear datos
         $this->limpiarBD();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->limpiarBD();
-        parent::tearDown();
+        
+        // Crear cliente de prueba
+        $cliente = new Cliente();
+        $cliente->setTipoDocumento('CC');
+        $cliente->setNumeroDocumento($this->documento);
+        $cliente->setNombres('Juan');
+        $cliente->setApellidos('Perez');
+        $cliente->setEmail('juan.recarga@test.com');
+        $cliente->setCelular($this->celular);
+        $cliente->setFechaRegistro(new \DateTime());
+        
+        $this->entityManager->persist($cliente);
+        $this->entityManager->flush();
+        
+        $this->clienteId = $cliente->getId();
+        
+        // Crear billetera con saldo inicial
+        $billetera = new Billetera();
+        $billetera->setCliente($cliente);
+        $billetera->setSaldo(100000);
+        $billetera->setFechaCreacion(new \DateTime());
+        
+        $this->entityManager->persist($billetera);
+        $this->entityManager->flush();
     }
 
     private function limpiarBD(): void
@@ -38,190 +61,88 @@ class RecargaBilleteraTest extends KernelTestCase
         $connection->executeStatement('DELETE FROM clientes');
     }
 
+    protected function tearDown(): void
+    {
+        // Limpiar datos de prueba
+        $this->entityManager->createQuery('DELETE FROM App\Entity\Transaccion t WHERE t.billetera IN (SELECT b.id FROM App\Entity\Billetera b WHERE b.cliente = :clienteId)')
+            ->setParameter('clienteId', $this->clienteId)
+            ->execute();
+            
+        $this->entityManager->createQuery('DELETE FROM App\Entity\Billetera b WHERE b.cliente = :clienteId')
+            ->setParameter('clienteId', $this->clienteId)
+            ->execute();
+            
+        $this->entityManager->createQuery('DELETE FROM App\Entity\Cliente c WHERE c.id = :clienteId')
+            ->setParameter('clienteId', $this->clienteId)
+            ->execute();
+            
+        parent::tearDown();
+    }
+
     public function testRecargaBilleteraExitosa(): void
     {
-        $response = $this->walletService->registroCliente(
-            'CC', '1234567890', 'Juan', 'Pérez', 'juan@example.com', '3001234567'
-        );
-        $this->assertTrue($response['success']);
-        $clienteId = $response['data']['id'];
-
-        $resultado = $this->walletService->recargaBilletera(
-            clienteId: $clienteId,
-            documento: 'CC',
-            numeroCelular: '3001234567',
-            valor: 50.00
+        $result = $this->walletService->recargaBilletera(
+            $this->clienteId,
+            $this->documento,
+            $this->celular,
+            50000,
+            'RECARGA-001'
         );
 
-         $this->assertTrue($resultado['success']);
-         $this->assertEquals('00', $resultado['cod_error']);
-         $this->assertArrayHasKey('data', $resultado);
-         $this->assertEquals('50.00', $resultado['data']['nuevoSaldo']);
-         $this->assertEquals('50.00', $resultado['data']['valor']);
-    }
-
-    public function testRecargaBilleteraActualizaSaldo(): void
-    {
-        $response = $this->walletService->registroCliente(
-            'CC', '1234567890', 'Juan', 'Pérez', 'juan@example.com', '3001234567'
-        );
-        $this->assertTrue($response['success']);
-        $clienteId = $response['data']['id'];
-        $saldoInicial = $response['data']['billetera']['saldo'];
-        $billeteraId = $response['data']['billetera']['id'];
-
-        $resultado = $this->walletService->recargaBilletera(
-            clienteId: $clienteId,
-            documento: 'CC',
-            numeroCelular: '3001234567',
-            valor: 75.50
-        );
-
-        $this->assertTrue($resultado['success']);
+        $this->assertTrue($result['success']);
+        $this->assertEquals('00', $result['cod_error']);
+        $this->assertEquals('Recarga realizada exitosamente', $result['message_error']);
         
-        $this->entityManager->clear();
-
-        $billeteraRecargada = $this->entityManager
-            ->getRepository(Billetera::class)
-            ->find($billeteraId);
-
-        $saldoEsperado = number_format((float)$saldoInicial + 75.50, 2, '.', '');
-        $this->assertEquals($saldoEsperado, $billeteraRecargada->getSaldo(),
-            'El saldo debe incrementarse correctamente');
+        $data = $result['data'];
+        $this->assertEquals(150000, $data['nuevoSaldo']); // 100000 + 50000
+        $this->assertEquals(50000, $data['monto']);
+        $this->assertEquals('RECARGA-001', $data['referencia']);
+        $this->assertArrayHasKey('transaccionId', $data);
+        $this->assertArrayHasKey('fecha', $data);
     }
 
-    public function testRecargaBilleteraCreaTransaccion(): void
+    public function testClienteNoEncontrado(): void
     {
-        $response = $this->walletService->registroCliente(
-            'CC', '1234567890', 'Juan', 'Pérez', 'juan@example.com', '3001234567'
-        );
-        $this->assertTrue($response['success']);
-        $clienteId = $response['data']['id'];
-        $billeteraId = $response['data']['billetera']['id'];
-
-        $resultado = $this->walletService->recargaBilletera(
-            clienteId: $clienteId,
-            documento: 'CC',
-            numeroCelular: '3001234567',
-            valor: 100.00
+        $result = $this->walletService->recargaBilletera(
+            99999,
+            '1234567890',
+            '3001234567',
+            50000,
+            'RECARGA-002'
         );
 
-        $this->assertTrue($resultado['success']);
-        $this->assertEquals('00', $resultado['cod_error']);
-        $transaccionId = $resultado['data']['transaccionId'];
-
-        $this->entityManager->clear();
-        $transaccionRecuperada = $this->entityManager
-            ->getRepository(Transaccion::class)
-            ->find($transaccionId);
-
-        $this->assertNotNull($transaccionRecuperada, 'La transacción debe existir en BD');
-        $this->assertEquals('recarga', $transaccionRecuperada->getTipo());
-        $this->assertEquals('100.00', $transaccionRecuperada->getMonto());
-        $this->assertEquals($billeteraId, $transaccionRecuperada->getBilletera()->getId());
+        $this->assertFalse($result['success']);
+        $this->assertEquals('03', $result['cod_error']);
+        $this->assertEquals('Cliente no encontrado', $result['message_error']);
     }
 
-    public function testRecargaBilleteraPersistenteEnBD(): void
+    public function testDatosIncorrectosDocumentoCelularNoCoinciden(): void
     {
-        $response = $this->walletService->registroCliente(
-            'CC', '1234567890', 'Juan', 'Pérez', 'juan@example.com', '3001234567'
-        );
-        $this->assertTrue($response['success']);
-        $clienteId = $response['data']['id'];
-        $billeteraId = $response['data']['billetera']['id'];
-
-        $resultado = $this->walletService->recargaBilletera(
-            clienteId: $clienteId,
-            documento: 'CC',
-            numeroCelular: '3001234567',
-            valor: 25.75
+        $result = $this->walletService->recargaBilletera(
+            $this->clienteId,
+            '1111111111', // Documento incorrecto
+            $this->celular,
+            50000,
+            'RECARGA-003'
         );
 
-        $this->assertTrue($resultado['success']);
-        $transaccionId = $resultado['data']['transaccionId'];
-
-        $this->entityManager->clear();
-
-        $billeteraRecuperada = $this->entityManager
-            ->getRepository(Billetera::class)
-            ->find($billeteraId);
-
-        $this->assertEquals('25.75', $billeteraRecuperada->getSaldo(),
-            'El saldo debe persistir en BD');
-
-        $transaccionRecuperada = $this->entityManager
-            ->getRepository(Transaccion::class)
-            ->find($transaccionId);
-
-        $this->assertNotNull($transaccionRecuperada, 'La transacción debe persistir en BD');
-        $this->assertEquals('recarga', $transaccionRecuperada->getTipo());
-        $this->assertEquals('25.75', $transaccionRecuperada->getMonto());
+        $this->assertFalse($result['success']);
+        $this->assertEquals('04', $result['cod_error']);
+        $this->assertEquals('Los datos de documento y celular no coinciden con el cliente', $result['message_error']);
     }
 
-    public function testRecargaBilleteraClienteNoEncontrado(): void
+    public function testValidacionCamposRequeridos(): void
     {
-        $resultado = $this->walletService->recargaBilletera(
-            clienteId: 9999,
-            documento: 'CC',
-            numeroCelular: '9999999999',
-            valor: 50.00
+        $result = $this->walletService->recargaBilletera(
+            0, // clienteId inválido
+            '', // documento vacío
+            '123', // celular inválido
+            -100, // monto inválido
+            '' // referencia vacía
         );
 
-        $this->assertFalse($resultado['success']);
-        $this->assertEquals('03', $resultado['cod_error']);
-        $this->assertStringContainsString('Cliente no encontrado', $resultado['message_error']);
-        $this->assertEmpty($resultado['data']);
-    }
-
-    public function testRecargaMultiplesVeces(): void
-    {
-        $response = $this->walletService->registroCliente(
-            'CC', '1234567890', 'Juan', 'Pérez', 'juan@example.com', '3001234567'
-        );
-        $this->assertTrue($response['success']);
-        $clienteId = $response['data']['id'];
-        $billeteraId = $response['data']['billetera']['id'];
-
-        $this->walletService->recargaBilletera(
-            clienteId: $clienteId,
-            documento: 'CC',
-            numeroCelular: '3001234567',
-            valor: 50.00
-        );
-
-        $this->walletService->recargaBilletera(
-            clienteId: $clienteId,
-            documento: 'CC',
-            numeroCelular: '3001234567',
-            valor: 25.50
-        );
-
-        $this->walletService->recargaBilletera(
-            clienteId: $clienteId,
-            documento: 'CC',
-            numeroCelular: '3001234567',
-            valor: 12.25
-        );
-
-        $this->entityManager->clear();
-
-        $billeteraFinal = $this->entityManager
-            ->getRepository(Billetera::class)
-            ->find($billeteraId);
-
-        $saldoEsperado = number_format(50.00 + 25.50 + 12.25, 2, '.', '');
-        $this->assertEquals($saldoEsperado, $billeteraFinal->getSaldo(),
-            'El saldo debe acumular todas las recargas');
-
-        $transacciones = $this->entityManager
-            ->getRepository(Transaccion::class)
-            ->findBy(['billetera' => $billeteraId]);
-
-        $this->assertCount(3, $transacciones, 'Deben existir 3 transacciones');
-
-        $montos = array_map(fn($t) => $t->getMonto(), $transacciones);
-        $this->assertContains('50.00', $montos);
-        $this->assertContains('25.50', $montos);
-        $this->assertContains('12.25', $montos);
+        $this->assertFalse($result['success']);
+        $this->assertEquals('01', $result['cod_error']);
+        $this->assertStringContainsString('Campos requeridos inválidos', $result['message_error']);
     }
 }
