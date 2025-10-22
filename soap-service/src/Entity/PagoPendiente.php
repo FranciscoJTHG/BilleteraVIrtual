@@ -27,14 +27,26 @@ class PagoPendiente
     #[ORM\Column(type: 'decimal', precision: 10, scale: 2)]
     private string $monto;
 
-    #[ORM\Column(type: 'string', length: 6)]
-    private string $token;
+    #[ORM\Column(type: 'string', length: 6, nullable: true)]
+    private ?string $token = null;
 
     #[ORM\Column(type: 'boolean', options: ['default' => false])]
     private bool $usado = false;
 
+    #[ORM\Column(type: 'string', length: 50, nullable: true)]
+    private ?string $estado = null;
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $descripcion = null;
+
     #[ORM\Column(type: 'datetime')]
-    private \DateTimeInterface $expiraEn;
+    private \DateTimeInterface $fechaCreacion;
+
+    #[ORM\Column(type: 'datetime')]
+    private \DateTimeInterface $fechaExpiracion;
+
+    #[ORM\Column(type: 'datetime', nullable: true)]
+    private ?\DateTimeInterface $fechaConfirmacion = null;
 
     #[ORM\Column(type: 'datetime', options: ['default' => 'CURRENT_TIMESTAMP'])]
     private \DateTimeInterface $createdAt;
@@ -104,20 +116,64 @@ class PagoPendiente
         return $this;
     }
 
-    public function getExpiraEn(): \DateTimeInterface
+    public function getEstado(): ?string
     {
-        return $this->expiraEn;
+        return $this->estado;
     }
 
-    public function setExpiraEn(\DateTimeInterface $expiraEn): static
+    public function setEstado(?string $estado): static
     {
-        $this->expiraEn = $expiraEn;
+        $this->estado = $estado;
+        return $this;
+    }
+
+    public function getDescripcion(): ?string
+    {
+        return $this->descripcion;
+    }
+
+    public function setDescripcion(?string $descripcion): static
+    {
+        $this->descripcion = $descripcion;
+        return $this;
+    }
+
+    public function getFechaCreacion(): \DateTimeInterface
+    {
+        return $this->fechaCreacion;
+    }
+
+    public function setFechaCreacion(\DateTimeInterface $fechaCreacion): static
+    {
+        $this->fechaCreacion = $fechaCreacion;
+        return $this;
+    }
+
+    public function getFechaExpiracion(): \DateTimeInterface
+    {
+        return $this->fechaExpiracion;
+    }
+
+    public function setFechaExpiracion(\DateTimeInterface $fechaExpiracion): static
+    {
+        $this->fechaExpiracion = $fechaExpiracion;
+        return $this;
+    }
+
+    public function getFechaConfirmacion(): ?\DateTimeInterface
+    {
+        return $this->fechaConfirmacion;
+    }
+
+    public function setFechaConfirmacion(?\DateTimeInterface $fechaConfirmacion): static
+    {
+        $this->fechaConfirmacion = $fechaConfirmacion;
         return $this;
     }
 
     public function isExpirado(): bool
     {
-        return new \DateTime() > $this->expiraEn;
+        return new \DateTime() > $this->fechaExpiracion;
     }
 
     public function getCreatedAt(): \DateTimeInterface
